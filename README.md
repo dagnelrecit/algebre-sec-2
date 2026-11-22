@@ -19,6 +19,7 @@ js/math/              ← moteur algébrique (correction, démarches)
 js/gen/               ← générateurs des 5 modules + schémas SVG
 data/enonces.js       ← ✏️ banques d'énoncés modifiables (module 4)
 lib/katex/            ← affichage mathématique (inclus : fonctionne sur un réseau filtré)
+version.json          ← ✏️ numéro de version (à changer à chaque mise à jour du site)
 sw.js, manifest.webmanifest, assets/  ← mode hors ligne et application installable
 apps-script/Code.gs   ← code à coller dans Google Apps Script
 tests/                ← tests automatiques (facultatif, avec Node.js)
@@ -63,7 +64,9 @@ export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfy…/exe
 4. Après 1 ou 2 minutes, ton site est en ligne à l'adresse `https://TON-NOM.github.io/algebre-sec2/`.
 5. L'espace enseignant se trouve à `…/algebre-sec2/enseignant.html` (il y a aussi un lien discret au bas de l'application).
 
-> Pour mettre le site à jour, téléverse le fichier modifié dans GitHub. Si les élèves voient encore l'ancienne version, change `VERSION` dans `sw.js` (ex. `alg2-v2`).
+> **Pour mettre le site à jour :** téléverse les fichiers modifiés dans GitHub, puis **change le numéro dans `version.json`** (ex. `2026-11-22.6` → `2026-11-23.1`).
+> Dans les 3 minutes, chaque onglet déjà ouvert (élève ou enseignant) affiche le bandeau « ✨ Une nouvelle version d'Algèbre² est disponible — Recharger ». En attendant le rechargement, cet onglet n'envoie plus la progression de l'élève : une ancienne version ne peut donc pas écraser les nouveautés (XP, badges…). Les réponses, elles, continuent d'être envoyées normalement.
+> Pour forcer aussi le renouvellement du cache hors ligne, change `VERSION` dans `sw.js` (ex. `alg2-v7`).
 
 ## Étape 4 — Première utilisation (administrateur)
 
@@ -181,11 +184,13 @@ node tests/badges.test.mjs       # XP, niveaux et badges
 | `QUESTIONS_PAR_SERIE` | 10 | Choix proposé par défaut |
 | `ESSAIS_PAR_QUESTION` | 2 | Essais avant d'afficher la démarche |
 | `NIP_LOCAL` | 2468 | NIP de l'espace enseignant en **mode local** seulement (sans feuille Google) |
+| `ECOLES_LOCALES` | vide | Écoles proposées à la connexion en **mode local** seulement (avec la feuille Google, la liste vient de l'onglet Écoles) |
 
 ## ❓ Dépannage
 | Problème | Solution |
 |---|---|
-| « 📴 Local » s'affiche | L'URL n'est pas configurée dans `js/config.js`. |
+| « 📴 Local » s'affiche et le champ **École** n'apparaît pas | L'URL n'est pas configurée (ou est mal copiée) dans `js/config.js`. La liste des écoles vient de la feuille Google : sans elle, le champ est masqué. Pour essayer l'application sans feuille Google, tu peux définir des écoles dans `ECOLES_LOCALES` (`js/config.js`). |
+| Le champ École affiche « Aucune école n'est encore créée » | Connecte-toi en `admin` dans l'espace enseignant et ajoute les écoles (onglet 🏛️ Écoles). |
 | « Aucun NIP administrateur » | Dans la feuille : menu *Algèbre² › Définir ou changer le NIP administrateur*. |
 | Un enseignant a oublié son NIP | L'administrateur entre un nouveau NIP dans l'onglet Enseignants. |
 | L'administrateur a oublié son NIP | Dans la feuille : menu *Algèbre² › Définir ou changer le NIP administrateur*. |

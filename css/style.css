@@ -420,3 +420,9 @@ input, select { font: inherit; color: var(--ink); }
 .confettis i { position: absolute; width: 9px; height: 14px; border-radius: 2px; animation: confetti 1.4s cubic-bezier(.2, .7, .4, 1) forwards; }
 @keyframes confetti { to { transform: translate(var(--x), var(--y)) rotate(var(--r)); opacity: 0; } }
 @media (max-width: 820px) { .entete-stats { display: none; } }
+
+/* Bandeau de mise à jour */
+.bandeau-maj { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: center; gap: .8rem; flex-wrap: wrap;
+  padding: .6rem 1rem; background: linear-gradient(90deg, var(--primary), #7c3aed); color: #fff; font-weight: 600; font-size: .95rem; }
+.bandeau-maj .btn { background: #fff; color: #3730a3; min-height: 34px; }
+.muted-inv { opacity: .85; font-weight: 400; }

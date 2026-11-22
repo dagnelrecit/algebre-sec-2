@@ -7,6 +7,7 @@ import { MODULES, MODULE_BY_ID, themeLabel } from './gen/index.js';
 import { h, escapeHtml as e, toast, fmtDuree, fmtDate, pct } from './ui/render.js';
 import * as S from './storage.js';
 import * as B from './badges.js';
+import { surveillerMisesAJour } from './maj.js';
 
 const app = document.getElementById('app');
 const T = {
@@ -16,6 +17,7 @@ const T = {
 try { const v = JSON.parse(sessionStorage.getItem('alg:ens') || 'null'); if (v) { T.token = v.token; T.session = v.session; } } catch (err) { /* rien */ }
 
 S.initApparence(document.getElementById('btnTheme'), document.getElementById('btnLecture'));
+surveillerMisesAJour();
 
 /* ---------- Outils ---------- */
 const nomEcole = (id) => (T.ecoles.find((x) => x.id === id) || {}).nom || S.nomEcole(id);

@@ -9,6 +9,7 @@ import { renderMath, texSpan, inlineMath, escapeHtml, h, toast, fmtDuree, fmtDat
 import { buildKeyboard, isTouch } from './ui/keyboard.js';
 import * as store from './storage.js';
 import * as B from './badges.js';
+import { surveillerMisesAJour } from './maj.js';
 
 const LOCAL = store.LOCAL;
 
@@ -90,10 +91,10 @@ function viewLogin() {
     </div>
     <div class="card login-card">
       <h2>Salut! 👋</h2>
-      <p class="muted small">${LOCAL ? 'Entre ton numéro de groupe et tes initiales.' : 'Choisis ton école, puis entre ton numéro de groupe et tes initiales. Utilise <b>toujours le même code</b> : ta progression te suit sur tous les appareils.'}</p>
+      <p class="muted small">${!store.avecEcole() ? 'Entre ton numéro de groupe et tes initiales.' : 'Choisis ton école, puis entre ton numéro de groupe et tes initiales. Utilise <b>toujours le même code</b> : ta progression te suit sur tous les appareils.'}</p>
       <form id="loginForm" autocomplete="off" novalidate>
         <div id="etapeCode">
-          ${LOCAL ? '' : `<label class="field"><span>École</span><select id="inEcole"><option value="">— Choisis ton école —</option>${store.ecoles().map((e) => `<option value="${escapeHtml(e.id)}" ${e.id === store.prefs.get('ecole', '') ? 'selected' : ''}>${escapeHtml(e.nom)}</option>`).join('')}</select></label>`}
+          ${!store.avecEcole() ? '' : `<label class="field"><span>École</span><select id="inEcole"><option value="">— Choisis ton école —</option>${store.ecoles().map((e) => `<option value="${escapeHtml(e.id)}" ${e.id === store.prefs.get('ecole', '') ? 'selected' : ''}>${escapeHtml(e.nom)}</option>`).join('')}</select></label><p class="form-error" id="aucuneEcole" hidden>Aucune école n'est encore créée. Ton enseignant·e doit d'abord l'ajouter dans l'espace enseignant (onglet 🏛️ Écoles).</p>`}
           <div class="field-row">
             <label class="field"><span>Groupe</span><input id="inGroupe" inputmode="numeric" maxlength="4" placeholder="201"></label>
             <label class="field"><span>Initiales</span><input id="inInitiales" maxlength="5" placeholder="DL" autocapitalize="characters" style="text-transform:uppercase"></label>
@@ -115,12 +116,14 @@ function viewLogin() {
       </form>
       ${codes.length ? `<div class="anciens-codes"><p class="muted small">Déjà utilisé sur cet appareil${LOCAL ? '' : ' (ton NIP sera demandé)'} :</p>${codes.map((c) => `<span class="puce-code"><button type="button" data-code="${escapeHtml(c)}">${escapeHtml(store.codeAffiche(c))}</button><button type="button" class="retirer" data-retirer="${escapeHtml(c)}" aria-label="Retirer ce code de cet appareil">✕</button></span>`).join('')}</div>` : ''}
       <p class="privacy">🔒 Aucun nom n'est enregistré : seulement ton groupe et tes initiales (Loi 25).</p>
-      ${LOCAL ? '<p class="mode-local">📴 Mode local : les résultats restent sur cet appareil.</p>' : ''}
+      ${LOCAL ? `<p class="mode-local">📴 Mode local : les résultats restent sur cet appareil.${store.raisonLocal() === 'invalide'
+        ? '<br><b>L\'adresse du script Google dans <code>js/config.js</code> semble mal copiée</b> : elle doit commencer par <code>https://script.google.com/</code> et se terminer par <code>/exec</code>.'
+        : '<br><span class="small">Pour brancher la feuille Google, colle l\'URL du script dans <code>js/config.js</code> (voir le README).</span>'}</p>` : ''}
     </div>`));
   const $ = (id) => document.getElementById(id);
   const err = (msg, champ) => { $('loginError').textContent = msg; if (champ) { champ.focus(); if (champ.select) champ.select(); } };
   const lireCode = () => {
-    const ec = LOCAL ? 'LOCAL' : $('inEcole').value;
+    const ec = store.avecEcole() ? $('inEcole').value : 'LOCAL';
     const g = $('inGroupe').value.replace(/\D/g, '');
     const i = $('inInitiales').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     return { ec, g, i, code: ec && g && i ? `${ec}-${g}-${i}` : '' };
@@ -145,11 +148,11 @@ function viewLogin() {
     let code = codeImpose;
     if (!code) {
       const { ec, g, i, code: c } = lireCode();
-      if (!LOCAL && !ec) return err('Choisis ton école.', $('inEcole'));
+      if (store.avecEcole() && !ec) return err('Choisis ton école.', $('inEcole'));
       if (!/^\d{1,4}$/.test(g)) return err('Entre ton numéro de groupe (des chiffres seulement).', $('inGroupe'));
       if (!/^[A-Z]{2,4}\d?$/.test(i)) return err('Entre 2 à 4 initiales (lettres), suivies au besoin d\'un chiffre.', $('inInitiales'));
       code = c;
-      if (!LOCAL) store.prefs.set('ecole', ec);
+      if (store.avecEcole()) store.prefs.set('ecole', ec);
     }
     if (LOCAL) return reussir(code, null);
     const btn = $('btnContinuer'); btn.disabled = true; btn.textContent = 'Vérification…';
@@ -177,12 +180,13 @@ function viewLogin() {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.retirer) { store.retirerCodeRecent(b.dataset.retirer); go('login'); return; }
     const c = store.decouperCode(b.dataset.code);
-    if (!LOCAL) $('inEcole').value = c.ecole;
+    if (store.avecEcole() && c.ecole !== 'LOCAL') $('inEcole').value = c.ecole;
     $('inGroupe').value = c.numero; $('inInitiales').value = c.initiales;
     validerCode(b.dataset.code);
   });
   if (!LOCAL) store.chargerEcoles().then((liste) => {
     const sel = $('inEcole'); if (!sel) return;
+    $('aucuneEcole').hidden = liste.length > 0;
     const actuel = sel.value || store.prefs.get('ecole', '');
     sel.innerHTML = '<option value="">— Choisis ton école —</option>' + liste.map((e) => `<option value="${escapeHtml(e.id)}" ${e.id === actuel ? 'selected' : ''}>${escapeHtml(e.nom)}</option>`).join('');
   });
@@ -194,10 +198,33 @@ function reussir(code, progressionServeur) {
   state.eleve = { code, ...c };
   const fusion = store.fusionnerProfils(store.lireProfil(code), progressionServeur);
   state.profil = Object.assign(store.profilVide(), fusion || {});
+  const rattrapage = rattraperRecompenses(state.profil);
   store.sauverProfil(code, state.profil);
-  if (LOCAL || JSON.stringify(fusion) === JSON.stringify(progressionServeur)) store.store.del('alg:sale:' + code);
+  if (LOCAL || (!rattrapage.xp && !rattrapage.badges.length && JSON.stringify(fusion) === JSON.stringify(progressionServeur))) store.store.del('alg:sale:' + code);
   go('home');
   store.planifierEnvoi(300);
+  if (rattrapage.xp) setTimeout(() => toast(`<span class="toast-icone">⭐</span> +${rattrapage.xp} XP pour tes exercices déjà faits!`, 'trophee', 4000, true), 300);
+  if (rattrapage.badges.length) setTimeout(() => annoncerBadges(rattrapage.badges, false), 900);
+}
+
+/**
+ * Rattrapage (une seule fois par élève) : exercices faits avant l'ajout des récompenses.
+ * Calcule l'XP à partir de l'historique (10 au 1er essai, 5 au 2e) et attribue les badges déjà mérités.
+ */
+function rattraperRecompenses(p) {
+  const out = { xp: 0, badges: [] };
+  if (!p.recompensesV1) {
+    if (!p.xp) {
+      const a = p.arch || {};
+      out.xp = (a.first || 0) * 10 + Math.max(0, (a.ok || 0) - (a.first || 0)) * 5
+        + (p.hist || []).reduce((s, h) => s + (h[3] === 1 ? 10 : h[3] === 2 ? 5 : 0), 0);
+      p.xp = out.xp;
+    }
+    p.recompensesV1 = true;
+  }
+  out.badges = B.verifierBadges(p, store.statsProfil(p), {});
+  if (out.xp || out.badges.length) store.store.set('alg:sale:' + state.eleve.code, !LOCAL);
+  return out;
 }
 
 /* ================================================================== */
@@ -734,6 +761,7 @@ function initChrome() {
   });
   window.addEventListener('pagehide', () => { store.viderFile(); });
   store.enregistrerServiceWorker();
+  surveillerMisesAJour();
 }
 
 initChrome();

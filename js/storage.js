@@ -5,7 +5,8 @@
  *  - progression sauvegardée dans la feuille et fusionnée entre appareils;
  *  - file d'attente hors ligne : rien n'est perdu si le Wi-Fi coupe.
  */
-import { GOOGLE_SCRIPT_URL } from './config.js';
+import { GOOGLE_SCRIPT_URL, CONFIG } from './config.js';
+import { estPerime } from './maj.js';
 
 /* ---------- Stockage local sécuritaire ---------- */
 export const store = {
@@ -18,6 +19,12 @@ export const prefs = { get: (n, d) => store.get('alg:pref:' + n, d), set: (n, v)
 /* ---------- API ---------- */
 export const urlConfiguree = () => typeof GOOGLE_SCRIPT_URL === 'string' && /^https:\/\/script\.google(usercontent)?\.com\//.test(GOOGLE_SCRIPT_URL);
 export const LOCAL = !urlConfiguree();
+/** Pourquoi le mode local : 'absente' (URL pas encore collée) ou 'invalide' (URL mal copiée). */
+export function raisonLocal() {
+  if (!LOCAL) return null;
+  const u = String(GOOGLE_SCRIPT_URL || '').trim();
+  return !u || u === 'VOTRE_URL_ICI' ? 'absente' : 'invalide';
+}
 
 export async function api(action, donnees = {}, delaiMs = 15000) {
   if (LOCAL) throw new Error("L'URL du script Google n'est pas configurée (js/config.js).");
@@ -43,7 +50,11 @@ export function decouperCode(code) {
 }
 export const initialesAffichees = (ini) => String(ini || '').replace(/([A-Z])(?=[A-Z]|\d|$)/g, '$1.');
 
-let ECOLES = store.get('alg:ecoles', []);
+const ECOLES_LOCALES = (CONFIG.ECOLES_LOCALES || []).filter((e) => e && /^[A-Z0-9]{2,6}$/.test(String(e.id || '').toUpperCase()) && e.nom)
+  .map((e) => ({ id: String(e.id).toUpperCase(), nom: String(e.nom) }));
+let ECOLES = LOCAL ? ECOLES_LOCALES : store.get('alg:ecoles', []);
+/** Le champ « École » est affiché avec la feuille Google, ou en mode local si des écoles sont définies dans config.js. */
+export const avecEcole = () => !LOCAL || ECOLES_LOCALES.length > 0;
 export const ecoles = () => ECOLES;
 export const nomEcole = (id) => (ECOLES.find((e) => e.id === id) || {}).nom || id;
 export function codeAffiche(code) {
@@ -120,7 +131,8 @@ export const profilVide = () => ({ v: 1, hist: [], arch: { n: 0, ok: 0, first: 0
 export function fusionnerProfils(a, b) {
   if (!a) return b ? JSON.parse(JSON.stringify(b)) : null;
   if (!b) return a;
-  const p = profilVide();
+  const p = Object.assign(profilVide(), b, a); // garde aussi les champs ajoutés par une version plus récente
+  p.hist = [];
   const vus = new Set();
   [...(a.hist || []), ...(b.hist || [])].forEach((h) => { if (!vus.has(h[0])) { vus.add(h[0]); p.hist.push(h); } });
   p.hist.sort((x, y) => parseInt(x[1], 36) - parseInt(y[1], 36));
@@ -133,6 +145,7 @@ export function fusionnerProfils(a, b) {
   p.best = Math.max(a.best || 0, b.best || 0);
   p.xp = Math.max(a.xp || 0, b.xp || 0);
   p.badges = [...new Set([...(a.badges || []), ...(b.badges || [])])];
+  p.recompensesV1 = !!(a.recompensesV1 || b.recompensesV1);
   p.jours = [...new Set([...(a.jours || []), ...(b.jours || [])])].sort().slice(-120);
   return compacter(p);
 }
@@ -181,7 +194,8 @@ export function sauverProfil(code, p) {
   if (!LOCAL) store.set('alg:sale:' + code, true);
 }
 export async function pousserProgression(code) {
-  if (LOCAL || !store.get('alg:sale:' + code, false) || !jeton(code)) return;
+  // Un onglet resté ouvert sur une ancienne version n'envoie plus la progression (elle pourrait écraser la nouvelle)
+  if (LOCAL || estPerime() || !store.get('alg:sale:' + code, false) || !jeton(code)) return;
   try {
     await api('saveProgress', { code, token: jeton(code), progression: lireProfil(code) }, 15000);
     store.del('alg:sale:' + code);
