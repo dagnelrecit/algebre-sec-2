@@ -1,0 +1,16 @@
+{
+  "name": "Algèbre² — entraînement en algèbre",
+  "short_name": "Algèbre²",
+  "description": "Séries d'exercices d'algèbre pour la 2e secondaire (PFEQ)",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f5fb",
+  "theme_color": "#4338ca",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

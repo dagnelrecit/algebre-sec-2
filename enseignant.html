@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="fr-CA" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Espace enseignant — Algèbre²</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#4338ca">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-view="teacher">
+  <a class="saut" href="#app">Aller au contenu</a>
+  <header class="topbar">
+    <a class="brand" href="index.html" style="color:inherit;text-decoration:none">
+      <span class="logo" aria-hidden="true"><i>x</i><sup>2</sup></span>
+      <span class="brand-text"><b>Algèbre² · Enseignant</b><small>Suivi des groupes</small></span>
+    </a>
+    <div class="top-right">
+      <span class="badge" id="qui" hidden></span>
+      <button class="btn btn-ghost btn-sm" id="btnDeconnexion" hidden>Se déconnecter</button>
+      <button class="btn-icone" id="btnLecture" aria-pressed="false" aria-label="Lecture facilitée" title="Lecture facilitée">Aa</button>
+      <button class="btn-icone" id="btnTheme" title="Mode clair / sombre">🌙</button>
+    </div>
+  </header>
+  <main id="app" tabindex="-1"></main>
+  <footer class="footer"><a href="index.html" class="teacher-link">← Retour à l'application élève</a></footer>
+  <script type="module" src="js/teacher.js"></script>
+</body>
+</html>

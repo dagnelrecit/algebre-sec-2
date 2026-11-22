@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr-CA" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Algèbre² — Entraînement en algèbre, 2e secondaire</title>
+  <meta name="description" content="Séries d'exercices d'algèbre (PFEQ, 2e secondaire) avec rétroaction immédiate et démarche détaillée.">
+  <meta name="theme-color" content="#4338ca">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="lib/katex/katex.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="lib/katex/katex.min.js"></script>
+</head>
+<body data-view="login">
+  <a class="saut" href="#app">Aller au contenu</a>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><i>x</i><sup>2</sup></span>
+      <span class="brand-text"><b id="appName">Algèbre²</b><small id="appSub">Entraînement — 2e secondaire</small></span>
+    </div>
+    <div class="top-right">
+      <span id="studentBadge" class="badge" hidden></span>
+      <span id="syncStatus" class="sync" role="status" aria-live="polite"></span>
+      <button class="btn-icone" id="btnLecture" aria-pressed="false" title="Lecture facilitée (texte plus grand et espacé)" aria-label="Lecture facilitée">Aa</button>
+      <button class="btn-icone" id="btnTheme" title="Mode clair / sombre">🌙</button>
+      <nav id="studentNav" class="topnav" hidden>
+        <button id="navHome" class="btn btn-ghost btn-sm">Modules</button>
+        <button id="navDash" class="btn btn-ghost btn-sm">Mon tableau de bord</button>
+        <button id="navLogout" class="btn btn-ghost btn-sm">Changer d'élève</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="app" tabindex="-1">
+    <noscript><div class="card">Cette application nécessite JavaScript.</div></noscript>
+  </main>
+
+  <footer class="footer">
+    <span>Conforme à la PDA — Mathématique, 1<sup>er</sup> cycle du secondaire</span>
+    <a href="enseignant.html" class="teacher-link">Espace enseignant</a>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
