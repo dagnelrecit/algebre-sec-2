@@ -115,7 +115,7 @@ export function memoriserConnexion(code) {
 /* ------------------------------------------------------------------ */
 const EPOQUE = Date.UTC(2020, 0, 1);
 const MAX_HIST = 700;
-export const profilVide = () => ({ v: 1, hist: [], arch: { n: 0, ok: 0, first: 0, time: 0, best: 0, byTheme: {} }, best: 0, jours: [] });
+export const profilVide = () => ({ v: 1, hist: [], arch: { n: 0, ok: 0, first: 0, time: 0, best: 0, byTheme: {} }, best: 0, jours: [], xp: 0, badges: [] });
 
 export function fusionnerProfils(a, b) {
   if (!a) return b ? JSON.parse(JSON.stringify(b)) : null;
@@ -131,6 +131,8 @@ export function fusionnerProfils(a, b) {
     p.arch.byTheme[k] = x.n >= y.n ? x : y;
   });
   p.best = Math.max(a.best || 0, b.best || 0);
+  p.xp = Math.max(a.xp || 0, b.xp || 0);
+  p.badges = [...new Set([...(a.badges || []), ...(b.badges || [])])];
   p.jours = [...new Set([...(a.jours || []), ...(b.jours || [])])].sort().slice(-120);
   return compacter(p);
 }
@@ -234,7 +236,7 @@ export async function viderFile() {
     }
   } catch (e) { /* hors ligne : on réessaiera */ } finally { envoiEnCours = false; notifier(); }
 }
-window.addEventListener('online', () => planifierEnvoi(300));
+if (typeof window !== 'undefined') window.addEventListener('online', () => planifierEnvoi(300));
 
 /* Indicateur de synchronisation (☁️ / ⏳ / 📴) */
 const abonnes = new Set();

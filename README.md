@@ -98,6 +98,30 @@ export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfy…/exe
 - **Correction tolérante** : l'ordre des termes est libre, la virgule décimale et `x = 4` sont acceptés, et `1x` est accepté avec un rappel. Une réponse équivalente mais **non réduite** est signalée comme telle.
 - **Défi mixte** : il pige davantage dans les thèmes les moins réussis par l'élève. **M'exercer sur mes erreurs** propose de nouvelles questions semblables.
 
+### 🏅 Récompenses (comme dans IrregularVerbs)
+- **XP** : 10 XP par bonne réponse au 1er essai, 5 XP au 2e essai, +2 XP pour une question difficile. Une série terminée au complet rapporte 20 XP de bonus, et 20 XP de plus si tout est réussi du premier coup.
+- **Niveaux** ⭐ : affichés en haut de l'écran, avec une jauge vers le niveau suivant.
+- **Série de jours** 🔥 : le nombre de jours consécutifs de pratique.
+- **17 badges** (confettis et notification au déblocage) :
+
+| Badge | Comment l'obtenir |
+|---|---|
+| 👣 Premier pas | Terminer une première série au complet |
+| 🔥 10 de suite · ⚡ Inarrêtable | 10, puis 25 bonnes réponses consécutives |
+| 💎 Sans faute | Une série d'au moins 10 questions, toutes réussies du premier coup |
+| 📅 Constance · 🗓️ Assiduité | Pratiquer 3 jours de suite · pendant 7 jours différents |
+| 🧭 Explorateur | Réussir au moins une question dans chacun des 5 modules |
+| 💯 Centurion | 100 questions réussies |
+| 📐 Géomètre | 10 questions de périmètre, d'aire ou de géométrie réussies |
+| 🔁 Revanche | Au moins 80 % dans une série « M'exercer sur mes erreurs » |
+| 🌟 Défi relevé | Au moins 80 % dans un défi mixte de 15 questions ou plus |
+| 🧗 Sommet | 5 équations de niveau 5 réussies du premier coup |
+| 🔬 🧹 🔢 🗣️ ⚖️ Maîtrise d'un module | Chaque thème du module : au moins 8 essais et 80 % de réussite |
+
+- Les badges de fin de série et le bonus d'XP se gagnent seulement en **terminant la série au complet**. Les XP par réponse comptent toujours.
+- XP, niveaux et badges font partie de la progression sauvegardée : ils suivent l'élève sur tous ses appareils. Aucun classement entre élèves n'est affiché.
+- Dans l'espace enseignant, la fiche d'un élève affiche son niveau, sa série de jours et ses badges.
+
 ### Rôles : administrateur et enseignants
 | | Administrateur (`admin`) | Enseignant |
 |---|---|---|
@@ -148,6 +172,7 @@ Les autres modules sont générés par programme : les gabarits se trouvent dans
 node tests/generators.test.mjs   # génère des milliers de questions et vérifie chaque réponse
 node tests/engine.test.mjs       # moteur de correction
 node tests/appsscript.test.cjs   # script Google (simulé)
+node tests/badges.test.mjs       # XP, niveaux et badges
 ```
 
 ## ⚙️ Réglages (`js/config.js`)

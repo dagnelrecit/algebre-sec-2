@@ -57,10 +57,10 @@ export function h(tag, attrs = {}, html = '') {
   return el;
 }
 
-export function toast(msg, kind = 'info', ms = 2600) {
+export function toast(msg, kind = 'info', ms = 2600, html = false) {
   let box = document.getElementById('toasts');
   if (!box) { box = h('div', { id: 'toasts', 'aria-live': 'polite' }); document.body.appendChild(box); }
-  const t = h('div', { class: `toast toast-${kind}` }, escapeHtml(msg));
+  const t = h('div', { class: `toast toast-${kind}` }, html ? msg : escapeHtml(msg));
   box.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, ms);
 }

@@ -6,6 +6,7 @@ import { CONFIG } from './config.js';
 import { MODULES, MODULE_BY_ID, themeLabel } from './gen/index.js';
 import { h, escapeHtml as e, toast, fmtDuree, fmtDate, pct } from './ui/render.js';
 import * as S from './storage.js';
+import * as B from './badges.js';
 
 const app = document.getElementById('app');
 const T = {
@@ -232,7 +233,8 @@ async function ficheEleve(code, lignes) {
   try {
     const info = await apiT('studentInfo', { code });
     const p = box.querySelector('#etatCompte');
-    p.innerHTML = `Compte : ${info.nipDefini ? '🔑 NIP défini' : '⚠️ aucun NIP (l\'élève en choisira un à sa prochaine connexion)'}${info.maj ? ` · progression mise à jour le ${fmtDate(info.maj)}` : ''} `;
+    const pr = info.progression || {};
+    p.innerHTML = `Compte : ${info.nipDefini ? '🔑 NIP défini' : '⚠️ aucun NIP (l\'élève en choisira un à sa prochaine connexion)'}${info.maj ? ` · progression mise à jour le ${fmtDate(info.maj)}` : ''}<br>⭐ Niveau ${B.niveau(pr.xp)} (${pr.xp || 0} XP) · 🔥 ${B.serieJours(pr.jours)} jour(s) de suite · 🏅 ${(pr.badges || []).length} badge(s) ${(pr.badges || []).map((id) => (B.BADGES.find((b) => b.id === id) || {}).icone || '').join(' ')} `;
     if (info.nipDefini) {
       const b = h('button', { class: 'btn btn-sm btn-ghost danger' }, 'Réinitialiser le NIP');
       p.appendChild(b);

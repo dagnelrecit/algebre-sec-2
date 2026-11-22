@@ -8,6 +8,7 @@ import { tryParse, toLatex } from './math/expr.js';
 import { renderMath, texSpan, inlineMath, escapeHtml, h, toast, fmtDuree, fmtDate, pct, latexToText } from './ui/render.js';
 import { buildKeyboard, isTouch } from './ui/keyboard.js';
 import * as store from './storage.js';
+import * as B from './badges.js';
 
 const LOCAL = store.LOCAL;
 
@@ -61,7 +62,13 @@ function updateHeader() {
     badge.hidden = false; nav.hidden = false;
     badge.textContent = store.codeAffiche(e.code);
     badge.title = 'Ton code';
+    const p = state.profil || store.profilVide();
+    const niv = B.progresNiveau(p.xp);
+    document.getElementById('pastilleSerie').innerHTML = `🔥 <b>${B.serieJours(p.jours)}</b>`;
+    document.getElementById('pastilleNiveau').innerHTML = `⭐ Niv. <b>${niv.n}</b>`;
+    document.getElementById('pastilleNiveau').title = `${niv.xp} XP — prochain niveau à ${niv.haut} XP`;
   } else { badge.hidden = true; nav.hidden = true; }
+  document.getElementById('enteteStats').hidden = badge.hidden;
 }
 
 /* ================================================================== */
@@ -216,13 +223,23 @@ function viewHome() {
         <div class="kpi"><b>${stats.best}</b><span>meilleure série</span></div>
       </div>
     </div>
+    ${(() => { const p = state.profil || store.profilVide(); const niv = B.progresNiveau(p.xp); const sj = B.serieJours(p.jours);
+      return `<div class="card niveau-carte">
+        <div class="niveau-badge">⭐<b>${niv.n}</b></div>
+        <div class="niveau-info"><div class="niveau-ligne"><b>Niveau ${niv.n}</b><span class="muted small">${niv.xp} XP · encore ${niv.haut - niv.xp} XP pour le niveau ${niv.n + 1}</span></div>
+          <span class="jauge-xp"><span style="width:${niv.pct}%"></span></span>
+          <span class="muted small">${sj > 1 ? `🔥 ${sj} jours de suite : continue!` : sj === 1 ? '🔥 Tu as pratiqué aujourd\'hui. Reviens demain pour allonger ta série!' : 'Un peu chaque jour, c\'est la clé : commence ta série 🔥'}</span></div>
+      </div>`; })()}
     <div class="modules">${cards}
       <button class="module-card mixte" data-mixte="1">
         <span class="module-num">★</span>
         <span class="module-body"><b>Défi mixte</b><small>Questions de tous les modules, avec plus de questions dans tes thèmes à travailler</small></span>
         <span class="module-stat">Go!</span>
       </button>
-    </div>`));
+    </div>
+    <h2 class="titre-section">🏅 Mes badges <span class="muted small">${(state.profil?.badges || []).length} / ${B.BADGES.length}</span></h2>
+    <div class="badges">${B.BADGES.map((b) => { const a = (state.profil?.badges || []).includes(b.id);
+      return `<div class="badge-carte ${a ? 'obtenu' : ''}" title="${escapeHtml(b.desc)}"><span aria-hidden="true">${a ? b.icone : '🔒'}</span><b>${escapeHtml(b.nom)}</b><small>${escapeHtml(b.desc)}</small></div>`; }).join('')}</div>`));
   app.querySelectorAll('[data-module]').forEach(b => b.addEventListener('click', () => go('setup', { moduleId: b.dataset.module })));
   app.querySelector('[data-mixte]').addEventListener('click', () => go('setup', { mixte: true }));
 }
@@ -309,7 +326,7 @@ function startSeries(cfg) {
     cfg.items.forEach(it => plan.push(it));
   }
   state.series = {
-    id: store.uid(), cfg, plan, index: 0, results: [], streak: 0, best: 0, start: Date.now(),
+    id: store.uid(), cfg, plan, index: 0, results: [], streak: 0, best: 0, start: Date.now(), xp: 0, nouveauxBadges: [], niveauAvant: B.niveau(state.profil?.xp), complete: false, termine: false,
   };
   nextQuestion();
 }
@@ -322,7 +339,7 @@ function difficultyFor(i, n, cfg, item) {
 
 function nextQuestion() {
   const S = state.series;
-  if (S.index >= S.plan.length) { store.viderFile(); go('summary'); return; }
+  if (S.index >= S.plan.length) { S.complete = true; terminerSerie(); store.viderFile(); go('summary'); return; }
   const item = S.plan[S.index];
   const d = difficultyFor(S.index, S.plan.length, S.cfg, item);
   const q = generate(item.m, item.t, d);
@@ -352,7 +369,7 @@ function viewDrill() {
     </article>`;
   app.appendChild(sec);
   document.getElementById('quit').onclick = () => {
-    if (S.results.length === 0 || confirm('Quitter la série? Tes réponses déjà données sont conservées.')) { store.viderFile(); S.results.length ? go('summary') : go('home'); }
+    if (S.results.length === 0 || confirm('Quitter la série? Tes réponses déjà données sont conservées.')) { terminerSerie(); store.viderFile(); S.results.length ? go('summary') : go('home'); }
   };
   buildAnswerZone();
 }
@@ -504,8 +521,16 @@ function finish(success, input, r) {
   store.enregistrerTentative(state.eleve.code, att);
   store.ajouterAuProfil(state.profil, att);
   state.profil.best = Math.max(state.profil.best || 0, S.best);
+  const xp = B.xpReponse(q, resultat);
+  const nivAvant = B.niveau(state.profil.xp);
+  state.profil.xp = (state.profil.xp || 0) + xp;
+  S.xp += xp;
+  const nouveaux = B.verifierBadges(state.profil, statsEleve(), { serieMax: S.best });
   store.sauverProfil(state.eleve.code, state.profil);
   state.sessionAttempts.push(att);
+  annoncerBadges(nouveaux);
+  if (B.niveau(state.profil.xp) > nivAvant) annoncerNiveau();
+  updateHeader();
 
   // Marque les choix
   if (q.answerType === 'choice' || q.answerType === 'multi') {
@@ -528,7 +553,7 @@ function finish(success, input, r) {
   const notes = (r && r.notes) || [];
   if (success) {
     fb.className = 'feedback fb-ok';
-    fb.innerHTML = `<p class="fb-title">✓ ${pick(BRAVO)} ${q.attempts > 1 ? '<span class="muted">(au 2e essai)</span>' : ''}</p>
+    fb.innerHTML = `<p class="fb-title">✓ ${pick(BRAVO)} ${q.attempts > 1 ? '<span class="muted">(au 2e essai)</span>' : ''} <span class="xp-gain">+${xp} XP</span></p>
       ${notes.map(n => `<p class="fb-note">${escapeHtml(n)}</p>`).join('')}
       <details class="steps-box"><summary>Voir la démarche</summary>${stepsHtml(q.steps)}</details>`;
   } else {
@@ -554,6 +579,37 @@ function nextAfterFeedback() {
   nextQuestion();
 }
 
+function annoncerBadges(liste, memoriser = true) {
+  if (!liste.length) return;
+  if (memoriser && state.series) state.series.nouveauxBadges.push(...liste);
+  B.confettis();
+  liste.forEach((b, i) => setTimeout(() => toast(`<span class="toast-icone">${b.icone}</span> Nouveau badge : <b>${escapeHtml(b.nom)}</b>`, 'trophee', 3500, true), 300 + i * 900));
+}
+function annoncerNiveau() {
+  B.confettis();
+  toast(`<span class="toast-icone">⭐</span> Niveau <b>${B.niveau(state.profil.xp)}</b> atteint!`, 'trophee', 3500, true);
+}
+
+/** Fin de série : bonus d'XP et badges de fin (seulement si la série est terminée au complet). */
+function terminerSerie() {
+  const S = state.series;
+  if (!S || S.termine || !S.results.length) return;
+  S.termine = true;
+  if (!S.complete) return;
+  const n = S.results.length;
+  const premiers = S.results.filter((r) => r.resultat === 1).length;
+  const second = S.results.filter((r) => r.resultat === 2).length;
+  const score = Math.round(((premiers + second * 0.5) / n) * 100);
+  const bonus = B.xpFinSerie(n, premiers);
+  const nivAvant = B.niveau(state.profil.xp);
+  state.profil.xp += bonus; S.xp += bonus; S.bonus = bonus;
+  const nouveaux = B.verifierBadges(state.profil, statsEleve(), { serieMax: S.best, fin: { mode: S.cfg.mode, n, premiers, score } });
+  store.sauverProfil(state.eleve.code, state.profil);
+  if (B.niveau(state.profil.xp) > nivAvant) setTimeout(annoncerNiveau, 600);
+  S.nouveauxBadges.push(...nouveaux);
+  setTimeout(() => { annoncerBadges(nouveaux, false); if (score >= 90 && !nouveaux.length) B.confettis(); }, 400);
+}
+
 /* ================================================================== */
 /* Bilan de série                                                      */
 /* ================================================================== */
@@ -577,9 +633,13 @@ function viewSummary() {
           <span class="tag ko">✕ ${fails.length} à revoir</span>
           <span class="tag">⏱ ${fmtDuree(time)}</span>
           <span class="tag">⚡ meilleure série : ${S.best}</span>
+          <span class="tag xp">⭐ +${S.xp} XP${S.bonus ? ` <small>(dont ${S.bonus} de bonus)</small>` : ''}</span>
         </div>
+        ${S.complete ? '' : '<p class="note-interrompue">⏸️ Série interrompue : tes réponses comptent, mais le bonus d\'XP et les badges de fin de série se gagnent en terminant la série au complet.</p>'}
+        ${(() => { const niv = B.progresNiveau(state.profil.xp); return `<div class="niveau-mini"><span><b>Niveau ${niv.n}</b>${niv.n > S.niveauAvant ? ' <span class="tag ok">Nouveau niveau! 🎉</span>' : ''}</span><span class="jauge-xp"><span style="width:${niv.pct}%"></span></span><span class="muted small">${niv.xp} / ${niv.haut} XP</span></div>`; })()}
       </div>
     </div>
+    ${S.nouveauxBadges.length ? `<div class="card"><h2>🏅 Badge${S.nouveauxBadges.length > 1 ? 's' : ''} débloqué${S.nouveauxBadges.length > 1 ? 's' : ''}!</h2><div class="badges">${S.nouveauxBadges.map((b) => `<div class="badge-carte obtenu nouveau"><span aria-hidden="true">${b.icone}</span><b>${escapeHtml(b.nom)}</b><small>${escapeHtml(b.desc)}</small></div>`).join('')}</div></div>` : ''}
     <div class="summary-actions">
       ${fails.length ? '<button class="btn btn-accent" id="redo">M\'exercer sur mes erreurs</button>' : ''}
       <button class="btn btn-primary" id="again">Nouvelle série</button>
