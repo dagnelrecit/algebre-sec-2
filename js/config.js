@@ -7,7 +7,7 @@
 // "VOTRE_URL_ICI", l'application fonctionne en « mode local » :
 // les élèves pratiquent, mais rien n'est envoyé à la feuille Google.
 // ⚠️ Utilise la feuille Google d'Algèbre² (pas celle des verbes irréguliers).
-export const GOOGLE_SCRIPT_URL = "VOTRE_URL_ICI";
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7ywzM34F9-bKKV4nhUOWsFuBpASaGS0WCTTOVDOMfHjXnLKNisgbREPSTXn6asdob/exec";
 
 export const CONFIG = {
   QUESTIONS_PAR_SERIE: 10,   // choix proposé par défaut (5, 10, 15 ou 20)
