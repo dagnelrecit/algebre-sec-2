@@ -38,13 +38,16 @@ tests/                ← tests automatiques (facultatif, avec Node.js)
 5. Menu **Algèbre² › 1. Préparer la feuille**. Google demande une autorisation la première fois :
    *Continuer › choisis ton compte › Paramètres avancés › Accéder au projet (non sécurisé) › Autoriser*. C'est normal : c'est ton propre script.
 6. Menu **Algèbre² › 2. Définir ou changer le NIP administrateur**, puis choisis un NIP de 4 à 8 chiffres. Sur le site, tu te connecteras avec l'identifiant **admin** et ce NIP.
-7. Dans Apps Script : **Déployer › Nouveau déploiement**
+7. *(Facultatif)* Menu **Algèbre² › 3. Courriel pour les demandes de comptes** : choisis l'adresse qui reçoit un courriel quand un enseignant demande un compte. Par défaut, c'est le propriétaire de la feuille.
+8. Dans Apps Script : **Déployer › Nouveau déploiement**
    - Type (⚙️) : **Application Web**
    - Exécuter en tant que : **Moi**
    - Qui a accès : **Tout le monde**
    - Clique sur **Déployer** et copie l'**URL de l'application Web** (elle se termine par `/exec`).
 
 > 💡 **Test rapide :** colle l'URL suivie de `?action=ping` dans ton navigateur. Tu dois voir `{"ok":true,"message":"Le script fonctionne.", "app":"algebre2", …}`.
+
+> 📧 **Mise à jour pour les demandes de comptes (si ta feuille est déjà installée) :** colle le nouveau `Code.gs`, enregistre, recharge la feuille, puis lance **Algèbre² › 1. Préparer la feuille**. Google redemande une autorisation, cette fois pour **envoyer des courriels en ton nom** : accepte-la. Publie ensuite une **nouvelle version** du déploiement (voir ci-dessous).
 
 > ⚠️ **Si tu modifies `Code.gs` plus tard :** *Déployer › Gérer les déploiements › ✏️ › Version : Nouvelle version › Déployer*. L'URL reste la même.
 
@@ -94,7 +97,7 @@ export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfy…/exe
 | 2. Réduction | addition et soustraction (signe − devant la parenthèse) · multiplication, division, distributivité · chaînes d'opérations |
 | 3. Valeur numérique | 1 variable · 2 variables · défi (3 variables, quotient, piège `−x²`) |
 | 4. Modélisation | traduction (banque) · problèmes en contexte (âges, argent, consécutifs) · périmètre et aire avec schéma |
-| 5. Équations | N1 une étape · N2 deux étapes · N3 inconnue des deux côtés · N4 parenthèses · N5 complexes (fractions) · géométrie (trouver x avec le périmètre). Des **décimales** apparaissent aux niveaux 2, 3 et 5 (ex. `3,5x − 7 + 2x = 16,1`) |
+| 5. Équations | N1 une étape · N2 deux étapes · N3 inconnue des deux côtés · N4 parenthèses · N5 complexes · **N5+ équations avec fractions** (ex. `(−x + 2)/3 = −x`, `x/4 + 11/12 = x/6 − 3/4`, `2x/7 + 3 = (x + 2)/3 + 2`) · géométrie (trouver x avec le périmètre). Des **décimales** apparaissent aux niveaux 2, 3 et 5 (ex. `3,5x − 7 + 2x = 16,1`) |
 
 - **Séries** de 5, 10, 15 ou 20 questions. La difficulté est progressive (facile → difficile) ou fixe.
 - **2 essais par question**, puis la **démarche étape par étape** : termes semblables en couleur, opération inverse faite des deux côtés, **validation** de la solution.
@@ -140,6 +143,14 @@ export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfy…/exe
 - Un élève qui entre un groupe qui n'existe pas est bloqué avec un message.
 - Le tri des données se fait dans le script Google : un enseignant ne reçoit jamais les résultats des autres groupes.
 - Les NIP sont hachés (jamais en clair). Après 5 essais ratés, l'identifiant est bloqué 5 minutes. La session enseignant expire après 6 heures d'inactivité ou à la fermeture de l'onglet.
+
+### Demandes de comptes enseignants (approbation par l'administrateur)
+1. Sur la page de connexion de l'espace enseignant, l'enseignant clique sur **« Demander un compte enseignant »**. Il remplit son nom, son école (liste des écoles actives), un identifiant, un NIP et, s'il le veut, son courriel.
+2. Le compte est créé **inactif**. L'administrateur reçoit un **courriel** avec le nom, l'identifiant et l'école. Tant que la demande n'est pas approuvée, l'enseignant voit « Ta demande est en attente d'approbation ».
+3. Dans l'espace enseignant (`admin`), un compteur 📨 apparaît sur l'onglet **🧑‍🏫 Enseignants**. La section **Demandes en attente** propose **✓ Approuver** ou **Refuser**.
+4. À l'approbation, le compte s'active. Si l'enseignant a donné son courriel, il reçoit un message de confirmation. Il crée ensuite lui-même ses groupes.
+- Anti-pourriel : au plus 10 demandes par heure. Un identifiant déjà utilisé est refusé.
+- Les courriels passent par le compte Google propriétaire de la feuille. La limite est d'environ 100 courriels par jour avec un compte personnel et de 1500 avec un compte scolaire Google Workspace.
 
 ### Pour l'enseignant (identifiant + NIP)
 - **👥 Élèves** : exercices, taux de réussite, réussite du 1er coup, temps moyen, thèmes en difficulté et carte de chaleur groupe × module. Filtres par groupe, élève, module et période.
@@ -192,6 +203,7 @@ node tests/badges.test.mjs       # XP, niveaux et badges
 | « 📴 Local » s'affiche et le champ **École** n'apparaît pas | L'URL n'est pas configurée (ou est mal copiée) dans `js/config.js`. La liste des écoles vient de la feuille Google : sans elle, le champ est masqué. Pour essayer l'application sans feuille Google, tu peux définir des écoles dans `ECOLES_LOCALES` (`js/config.js`). |
 | Le champ École affiche « Aucune école n'est encore créée » | Connecte-toi en `admin` dans l'espace enseignant et ajoute les écoles (onglet 🏛️ Écoles). |
 | « Aucun NIP administrateur » | Dans la feuille : menu *Algèbre² › Définir ou changer le NIP administrateur*. |
+| Aucun courriel n'arrive pour les demandes de comptes | Lance une fois **Algèbre² › 1. Préparer la feuille** pour autoriser l'envoi de courriels, puis publie une nouvelle version du déploiement. Vérifie l'adresse avec le menu 3 et regarde dans les courriels indésirables. La demande apparaît quand même dans l'onglet Enseignants. |
 | Un enseignant a oublié son NIP | L'administrateur entre un nouveau NIP dans l'onglet Enseignants. |
 | L'administrateur a oublié son NIP | Dans la feuille : menu *Algèbre² › Définir ou changer le NIP administrateur*. |
 | « Ce groupe n'existe pas dans cette école » | L'enseignant doit d'abord créer ce groupe dans **Mes groupes**, dans la bonne école. |

@@ -166,6 +166,67 @@ function niveau5() {
 }
 function gcd(a, b) { return b ? gcd(b, a % b) : Math.abs(a); }
 
+/* ---------- Niveau 5+ : équations avec fractions (expressions rationnelles) ----------
+   Formes du cahier (no 22) :  (−x + 2)/3 = −x   ·   x/4 + 11/12 = x/6 − 3/4
+                               2x/7 + 3 = (x + 2)/3 + 2   ·   2x/9 − 1/3 = (x − 1)/6            */
+const lcmN = (a, b) => (a * b) / gcd(a, b);
+/** Fraction → texte pour l'analyseur, avec signe : « +11/12 », « -3/4 », « +2 » ; rien si nulle */
+function fracTxt(f, debut = false) {
+  if (f.isZero()) return '';
+  const corps = f.isInt() ? String(Math.abs(f.n)) : `${Math.abs(f.n)}/${f.d}`;
+  return (f.isNeg() ? '-' : debut ? '' : '+') + corps;
+}
+/** Monôme fractionnaire kx/a écrit comme dans le cahier : « 2x/7 », « x/4 », « -x/3 » */
+function monoFrac(k, v, a) { return `${k === 1 ? '' : k === -1 ? '-' : k}${v}/${a}`; }
+
+function niveauFractions() {
+  const v = letter(['x', 'x', 'a', 'n', 'y', 'm']);
+  const kind = randInt(1, 4);
+  if (kind === 1) { // (px + q)/c = rx + t
+    for (let i = 0; i < 50; i++) {
+      const c = randInt(2, 6), p = randNZ(-4, 5), r = randNZ(-4, 4), s = randNZ(-8, 9);
+      if (p === c * r) continue;
+      const k = randNZ(-4, 4), q = c * k - p * s;              // (p s + q) divisible par c
+      if (q === 0 || Math.abs(q) > 30) continue;
+      const t = (p * s + q) / c - r * s;
+      return eqQ(`(${sum([[p, v], [q, '']])})/${c}`, sum([[r, v], [t, '']]), v);
+    }
+  }
+  if (kind === 2) { // x/a + m/L = x/b + n/L  (constantes fractionnaires)
+    const [a, b] = choice([[4, 6], [2, 3], [3, 4], [2, 5], [4, 3], [6, 4], [3, 2], [6, 9]]);
+    const L = choice([lcmN(a, b), lcmN(a, b) * 2].filter((x) => x <= 24));
+    const s = lcmN(a, b) * randNZ(-4, 4);
+    const m = new Frac(randNZ(-L + 1, L - 1), L);
+    const n = m.add(new Frac(s, a)).sub(new Frac(s, b));
+    if (m.isInt() || n.isInt() || Math.abs(n.toNumber()) > 12) return niveauFractions();
+    return eqQ(`${monoFrac(1, v, a)}${fracTxt(m)}`, `${monoFrac(1, v, b)}${fracTxt(n)}`, v);
+  }
+  if (kind === 3) { // kx/a + c = (x + d)/b + e
+    for (let i = 0; i < 50; i++) {
+      const [a, b] = choice([[7, 3], [3, 4], [5, 2], [4, 3], [2, 5], [6, 4], [5, 3]]);
+      const k = randInt(1, 3); if (k % a === 0 || gcd(k, a) !== 1) continue;
+      const s = lcmN(a, b) * randNZ(-2, 3);
+      const d = randNZ(-9, 9); if ((s + d) % b !== 0) continue;
+      const c = randNZ(-9, 9);
+      const e = (k * s) / a + c - (s + d) / b;
+      if (k * b === a) continue;
+      return eqQ(`${monoFrac(k, v, a)}${c < 0 ? '' : '+'}${c}`, `(${sum([[1, v], [d, '']])})/${b}${e === 0 ? '' : (e < 0 ? '' : '+') + e}`, v);
+    }
+  }
+  // kx/a − p/q = (x − d)/b
+  for (let i = 0; i < 80; i++) {
+    const [a, b] = choice([[9, 6], [3, 4], [5, 2], [4, 6], [3, 5], [9, 3]]);
+    const k = randInt(1, 3); if (gcd(k, a) !== 1 || k * b === a) continue;
+    const s = lcmN(a, b) * randNZ(-2, 3) / (randInt(0, 1) ? 1 : 1);
+    const d = randNZ(-6, 6);
+    const cst = new Frac(s - d, b).sub(new Frac(k * s, a)).neg(); // kx/a − cst = (x − d)/b
+    if (cst.isZero() || cst.isInt() || cst.d > 18 || Math.abs(cst.toNumber()) > 6) continue;
+    return eqQ(`${monoFrac(k, v, a)}${fracTxt(cst.neg())}`, `(${sum([[1, v], [-d, '']])})/${b}`, v);
+  }
+  return niveau5();
+}
+
+
 /* ---------- Application géométrique : trouver x à partir du périmètre ---------- */
 function geo() {
   const v = 'x';
@@ -200,5 +261,6 @@ export const THEMES = {
   n3: { label: 'Niveau 3 — Inconnue des deux côtés', gen: niveau3 },
   n4: { label: 'Niveau 4 — Parenthèses', gen: niveau4 },
   n5: { label: 'Niveau 5 — Équations complexes', gen: niveau5 },
+  frac: { label: 'Niveau 5+ — Équations avec fractions', gen: niveauFractions },
   geo: { label: 'Géométrie — Trouver x avec le périmètre', gen: geo },
 };

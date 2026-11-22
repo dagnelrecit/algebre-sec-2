@@ -63,8 +63,10 @@ function vueConnexion() {
       <label class="field"><span>NIP</span><input id="inNip" class="nip-input" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password"></label>
       <p class="form-error" id="err" role="alert"></p>
       <button class="btn btn-primary btn-lg" id="btnNip">Entrer</button>
-      <p class="aide" style="margin-top:.8rem">${S.LOCAL ? '📴 Mode local : NIP défini dans <code>js/config.js</code> (NIP_LOCAL). Seuls les résultats de cet appareil sont visibles.' : 'Pas de compte? Demande-le à l\'administrateur de l\'application.'}</p>
+      <p class="aide" style="margin-top:.8rem">${S.LOCAL ? '📴 Mode local : NIP défini dans <code>js/config.js</code> (NIP_LOCAL). Seuls les résultats de cet appareil sont visibles.' : 'Pas de compte? <button type="button" class="link" id="lienDemande">Demander un compte enseignant</button>'}</p>
     </form>`;
+  const lien = app.querySelector('#lienDemande');
+  if (lien) lien.onclick = vueDemande;
   const f = app.querySelector('#fNip');
   (S.LOCAL ? f.querySelector('#inNip') : f.querySelector('#inId')).focus();
   f.addEventListener('submit', async (ev) => {
@@ -82,6 +84,49 @@ function vueConnexion() {
       sessionStorage.setItem('alg:ens', JSON.stringify({ token: T.token, session: T.session }));
       charger();
     } catch (err) { f.querySelector('#err').textContent = err.message; btn.disabled = false; }
+  });
+}
+
+/* ================= Demande de compte (approuvée par l'administrateur) ================= */
+async function vueDemande() {
+  app.innerHTML = `
+    <form class="card login-card narrow" id="fDemande" autocomplete="off">
+      <div style="font-size:2.4rem" aria-hidden="true">🧑‍🏫</div>
+      <h1>Demander un compte</h1>
+      <p class="muted small">Ta demande sera envoyée à l'administrateur. Tu pourras te connecter dès qu'elle sera approuvée.</p>
+      <label class="field"><span>Ton nom (visible par l'administrateur)</span><input name="nom" maxlength="60" placeholder="ex. Mme Tremblay" required></label>
+      <label class="field"><span>École</span><select name="ecole" required><option value="">Chargement…</option></select></label>
+      <label class="field"><span>Identifiant de connexion</span><input name="identifiant" maxlength="20" autocapitalize="off" spellcheck="false" placeholder="ex. mtremblay" required>
+        <small>2 à 20 caractères : lettres minuscules, chiffres, point ou tiret.</small></label>
+      <div class="field-row">
+        <label class="field"><span>NIP (4 à 8 chiffres)</span><input name="pin" type="password" inputmode="numeric" maxlength="8" required></label>
+        <label class="field"><span>Confirme ton NIP</span><input name="pin2" type="password" inputmode="numeric" maxlength="8" required></label>
+      </div>
+      <label class="field"><span>Ton courriel <em>(facultatif)</em></span><input name="courriel" type="email" maxlength="120" placeholder="pour être avisé·e de l'approbation">
+        <small>Utilisé seulement pour t'aviser quand ton compte est activé.</small></label>
+      <p class="form-error" id="err" role="alert"></p>
+      <button class="btn btn-primary btn-lg" id="btnEnvoyer">Envoyer ma demande</button>
+      <p class="aide" style="margin-top:.8rem"><button type="button" class="link" id="retour">← Retour à la connexion</button></p>
+    </form>`;
+  const f = app.querySelector('#fDemande');
+  f.querySelector('#retour').onclick = vueConnexion;
+  const ecoles = await S.chargerEcoles();
+  f.ecole.innerHTML = ecoles.length
+    ? '<option value="">— Choisis ton école —</option>' + ecoles.map((x) => `<option value="${e(x.id)}">${e(x.nom)}</option>`).join('')
+    : '<option value="">Aucune école n\'est encore créée</option>';
+  f.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const d = Object.fromEntries(new FormData(f));
+    const err = f.querySelector('#err');
+    if (d.pin !== d.pin2) { err.textContent = 'Les deux NIP ne sont pas identiques.'; return; }
+    const btn = f.querySelector('#btnEnvoyer'); btn.disabled = true; btn.textContent = 'Envoi…';
+    try {
+      await S.api('teacherSignup', { nom: d.nom, ecole: d.ecole, identifiant: d.identifiant.trim().toLowerCase(), pin: d.pin, courriel: d.courriel, lien: location.href.split('#')[0] });
+      app.innerHTML = `<div class="card login-card narrow"><div style="font-size:2.4rem" aria-hidden="true">📨</div><h1>Demande envoyée!</h1>
+        <p>L'administrateur a été avisé. Dès que ta demande sera approuvée, tu pourras te connecter avec l'identifiant <b>${e(d.identifiant.trim().toLowerCase())}</b> et ton NIP${d.courriel ? ' (tu recevras aussi un courriel)' : ''}.</p>
+        <button class="btn btn-primary" id="ok">Retour à la connexion</button></div>`;
+      app.querySelector('#ok').onclick = vueConnexion;
+    } catch (ex) { err.textContent = ex.message; btn.disabled = false; btn.textContent = 'Envoyer ma demande'; }
   });
 }
 
@@ -126,9 +171,12 @@ function vueTableau() {
       <button class="btn btn-ghost" id="btnActualiser">↻ Actualiser</button>
     </div>
     <nav class="tabs" role="tablist">${ONGLETS.filter(([, , cond]) => !cond || (cond === 'admin' ? admin && !S.LOCAL : !S.LOCAL))
-      .map(([id, lib]) => `<button role="tab" data-tab="${id}" aria-selected="${T.tab === id}" class="${T.tab === id ? 'active' : ''}">${lib}</button>`).join('')}</nav>
+      .map(([id, lib]) => { const n = id === 'enseignants' ? T.enseignants.filter((x) => x.enAttente).length : 0;
+        return `<button role="tab" data-tab="${id}" aria-selected="${T.tab === id}" class="${T.tab === id ? 'active' : ''}">${lib}${n ? ` <span class="compteur">${n}</span>` : ''}</button>`; }).join('')}</nav>
+    ${admin && T.tab !== 'enseignants' && T.enseignants.some((x) => x.enAttente) ? `<p class="mode-local">📨 ${T.enseignants.filter((x) => x.enAttente).length} demande(s) de compte enseignant en attente : <button class="link" id="voirDemandes">voir les demandes</button></p>` : ''}
     <div id="corps"></div>`;
   app.querySelector('#btnActualiser').onclick = charger;
+  const vd = app.querySelector('#voirDemandes'); if (vd) vd.onclick = () => { T.tab = 'enseignants'; vueTableau(); };
   app.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { T.tab = b.dataset.tab; vueTableau(); }; });
   ({ eleves: ongletEleves, themes: ongletThemes, groupes: ongletGroupes, ecoles: ongletEcoles, enseignants: ongletEnseignants, compte: ongletCompte })[T.tab]();
 }
@@ -338,7 +386,14 @@ function ongletEcoles() {
 /* ---------- 🧑‍🏫 Enseignants (administrateur) ---------- */
 function ongletEnseignants() {
   const corps = document.getElementById('corps');
+  const attente = T.enseignants.filter((x) => x.enAttente);
+  const comptes = T.enseignants.filter((x) => !x.enAttente);
   corps.innerHTML = `
+    ${attente.length ? `<div class="card demandes"><h2>📨 Demandes en attente (${attente.length})</h2>
+      <table class="tbl"><thead><tr><th>Nom</th><th>Identifiant</th><th>École indiquée</th><th>Courriel</th><th>Demandé le</th><th></th></tr></thead><tbody>
+      ${attente.map((x) => `<tr><td><b>${e(x.nom)}</b></td><td><code>${e(x.identifiant)}</code></td><td>${e(x.ecole)}</td><td>${e(x.courriel) || '<span class="muted">—</span>'}</td><td class="muted">${fmtDate(x.creeLe)}</td>
+        <td class="actions-cell"><button class="btn btn-sm btn-primary" data-approuver="${e(x.identifiant)}">✓ Approuver</button><button class="btn btn-sm btn-ghost danger" data-refuser="${e(x.identifiant)}">Refuser</button></td></tr>`).join('')}
+      </tbody></table><p class="muted small">Approuver active le compte${attente.some((x) => x.courriel) ? ' et envoie un courriel à l\'enseignant s\'il en a donné un' : ''}. Refuser supprime la demande.</p></div>` : ''}
     <form class="card form-inline" id="fEns"><h2>Ajouter un enseignant</h2>
       <label>Nom<input name="nom" maxlength="60" placeholder="Mme Roy" required></label>
       <label>Identifiant<input name="identifiant" maxlength="20" placeholder="mroy" autocapitalize="off" required></label>
@@ -347,8 +402,8 @@ function ongletEnseignants() {
       <p class="muted small">Transmets l'identifiant et le NIP à l'enseignant : il pourra changer son NIP dans ⚙️ Mon compte. Chaque enseignant ne voit que ses groupes.</p>
     </form>
     <div class="card"><h2>Comptes enseignants</h2>
-      ${T.enseignants.length ? `<table class="tbl"><thead><tr><th>Nom</th><th>Identifiant</th><th>Groupes</th><th>Actif</th><th>Nouveau NIP</th><th></th></tr></thead><tbody>
-      ${T.enseignants.map((x) => `<tr><td>${e(x.nom)}</td><td><code>${e(x.identifiant)}</code></td><td>${(x.groupes || []).map((g) => e(nomGroupe(g))).join(', ') || '—'}</td>
+      ${comptes.length ? `<table class="tbl"><thead><tr><th>Nom</th><th>Identifiant</th><th>Groupes</th><th>Actif</th><th>Nouveau NIP</th><th></th></tr></thead><tbody>
+      ${comptes.map((x) => `<tr><td>${e(x.nom)}</td><td><code>${e(x.identifiant)}</code></td><td>${(x.groupes || []).map((g) => e(nomGroupe(g))).join(', ') || '—'}</td>
         <td><label class="switch"><input type="checkbox" data-actif="${e(x.identifiant)}" ${x.actif ? 'checked' : ''}><span>${x.actif ? 'oui' : 'non'}</span></label></td>
         <td><form class="mini-form" data-nip="${e(x.identifiant)}"><input name="pin" inputmode="numeric" maxlength="8" placeholder="NIP"><button class="btn btn-sm btn-ghost">OK</button></form></td>
         <td>${(x.groupes || []).length ? '' : `<button class="btn btn-sm btn-ghost danger" data-suppr="${e(x.identifiant)}">Supprimer</button>`}</td></tr>`).join('')}
@@ -365,6 +420,8 @@ function ongletEnseignants() {
     try { await apiT('saveTeacher', { identifiant: f.dataset.nip, pin: f.pin.value.trim() }); toast('Nouveau NIP enregistré.', 'ok'); f.reset(); } catch (err) { toast(err.message, 'err'); }
   }));
   corps.querySelectorAll('[data-suppr]').forEach((b) => deuxClics(b, async () => { await apiT('deleteTeacher', { identifiant: b.dataset.suppr }); toast('Compte supprimé.', 'ok'); charger(); }));
+  corps.querySelectorAll('[data-approuver]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { await apiT('saveTeacher', { identifiant: b.dataset.approuver, actif: true }); toast('Compte approuvé : l\'enseignant peut maintenant se connecter.', 'ok', 4000); charger(); } catch (err) { toast(err.message, 'err'); b.disabled = false; } }; });
+  corps.querySelectorAll('[data-refuser]').forEach((b) => deuxClics(b, async () => { await apiT('deleteTeacher', { identifiant: b.dataset.refuser }); toast('Demande refusée.', 'ok'); charger(); }, 'Refuser vraiment?'));
 }
 
 /* ---------- ⚙️ Mon compte ---------- */

@@ -426,3 +426,5 @@ input, select { font: inherit; color: var(--ink); }
   padding: .6rem 1rem; background: linear-gradient(90deg, var(--primary), #7c3aed); color: #fff; font-weight: 600; font-size: .95rem; }
 .bandeau-maj .btn { background: #fff; color: #3730a3; min-height: 34px; }
 .muted-inv { opacity: .85; font-weight: 400; }
+.compteur { display: inline-grid; place-items: center; min-width: 1.4em; height: 1.4em; padding: 0 .35em; border-radius: 999px; background: var(--accent); color: #fff; font-size: .75rem; margin-left: .25rem; }
+.demandes { border-top: 4px solid var(--accent); }

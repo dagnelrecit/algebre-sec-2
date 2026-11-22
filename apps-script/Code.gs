@@ -11,6 +11,8 @@
  *  4. Déployer > Nouveau déploiement > Application Web
  *       Exécuter en tant que : Moi      Qui a accès : Tout le monde
  *  5. Copie l'URL (…/exec) dans js/config.js du site.
+ *  6. (Facultatif) Menu > « 3. Courriel pour les demandes de comptes » : adresse avisée quand un
+ *     enseignant demande un compte (par défaut : le propriétaire de la feuille).
  * ============================================================
  *  Rôles
  *  - Administrateur (identifiant « admin ») : voit et gère tout (écoles, enseignants, groupes).
@@ -29,7 +31,7 @@ const F_GRP = 'Groupes';
 const F_ECOLES = 'Écoles';
 const F_ELEVES = 'Élèves';
 const E_RES = ['Date', 'Code', 'Groupe', 'Module', 'Thème', 'Niveau', 'Question', 'Réponse de l\'élève', 'Réponse attendue', 'Résultat (1 = 1er essai, 2 = 2e essai, 0 = échec)', 'Essais', 'Temps (s)', 'Série', 'Mode', 'ID'];
-const E_ENS = ['Identifiant', 'Nom', 'Empreinte du NIP (ne pas modifier)', 'Sel (ne pas modifier)', 'Actif', 'Créé le'];
+const E_ENS = ['Identifiant', 'Nom', 'Empreinte du NIP (ne pas modifier)', 'Sel (ne pas modifier)', 'Actif', 'Créé le', 'Demande (en attente = à approuver)', 'École indiquée', 'Courriel (facultatif)'];
 const E_GRP = ['Groupe (ÉCOLE-numéro)', 'Enseignant (identifiant)', 'Créé le'];
 const E_ECOLES = ['ID (ne pas modifier)', 'Nom', 'Active', 'Créée le'];
 const E_ELEVES = ['Code', 'Empreinte du NIP (ne pas modifier)', 'Sel (ne pas modifier)', 'Jetons (ne pas modifier)', 'Progression (ne pas modifier)', 'Mise à jour', 'Créé le'];
@@ -48,6 +50,7 @@ function onOpen() {
     .createMenu('Algèbre²')
     .addItem('1. Préparer la feuille', 'preparerFeuille')
     .addItem('2. Définir ou changer le NIP administrateur', 'definirNip')
+    .addItem('3. Courriel pour les demandes de comptes', 'definirCourriel')
     .addToUi();
 }
 
@@ -55,6 +58,7 @@ function preparerFeuille() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const feuilles = [feuille_(F_RES, E_RES), feuille_(F_ECOLES, E_ECOLES), feuille_(F_GRP, E_GRP), feuille_(F_ENS, E_ENS), feuille_(F_ELEVES, E_ELEVES)];
   feuilles[0].getRange('A:A').setNumberFormat('yyyy-mm-dd hh:mm');
+  completerEntetes_(feuilles[3], E_ENS); // colonnes ajoutées pour les demandes de comptes
   feuilles.forEach(function (f) {
     f.setFrozenRows(1);
     f.getRange(1, 1, 1, f.getLastColumn()).setFontWeight('bold').setBackground('#eef0ff');
@@ -74,6 +78,26 @@ function definirNip() {
   if (!/^\d{4,8}$/.test(nip)) { ui.alert('Le NIP doit contenir de 4 à 8 chiffres. Recommence.'); return; }
   enregistrerNipAdmin_(nip);
   ui.alert('🔑 NIP administrateur enregistré (chiffré dans les propriétés du script).\nConnexion sur le site : identifiant « admin » + ce NIP.');
+}
+
+function definirCourriel() {
+  const ui = SpreadsheetApp.getUi();
+  const actuel = courrielAdmin_();
+  const r = ui.prompt('Courriel pour les demandes de comptes', 'Adresse qui reçoit un courriel quand un enseignant demande un compte' + (actuel ? ' (actuelle : ' + actuel + ')' : '') + ' :', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const c = r.getResponseText().trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c)) { ui.alert('Adresse invalide. Recommence.'); return; }
+  PropertiesService.getScriptProperties().setProperty('COURRIEL_ADMIN', c);
+  ui.alert('📧 Les demandes de comptes seront envoyées à ' + c + '.');
+}
+function courrielAdmin_() {
+  const p = PropertiesService.getScriptProperties().getProperty('COURRIEL_ADMIN');
+  if (p) return p;
+  try { return Session.getEffectiveUser().getEmail(); } catch (e) { return ''; }
+}
+function completerEntetes_(f, entetes) {
+  const actuels = f.getRange(1, 1, 1, entetes.length).getValues()[0];
+  entetes.forEach(function (h, i) { if (!actuels[i]) f.getRange(1, i + 1).setValue(h); });
 }
 
 /* ================= Points d'entrée Web ================= */
@@ -101,6 +125,7 @@ function traiter_(req) {
       case 'submit':          jetonEleve_(req.code, req.token); return enregistrerTentatives_(req.tentatives || [], req.code);
       case 'saveProgress':    return sauverProgression_(jetonEleve_(req.code, req.token), req.progression);
       case 'login':           return connexion_(req.identifiant, req.pin);
+      case 'teacherSignup':   return demanderCompte_(req);
     }
     // ---- Actions qui exigent une session enseignant
     const s = session_(req.token);
@@ -160,7 +185,10 @@ function connexion_(identifiant, nip) {
     if (hacher_((p.getProperty('NIP_SEL') || '') + String(nip || '')) === hash) session = { id: ADMIN, role: 'admin', nom: 'Administrateur' };
   } else {
     const e = trouverEnseignant_(id);
-    if (e && e.actif && hacher_(e.sel + String(nip || '')) === e.hash) session = { id: e.identifiant, role: 'enseignant', nom: e.nom };
+    if (e && hacher_(e.sel + String(nip || '')) === e.hash) {
+      if (e.enAttente) throw new Error('Ta demande de compte est en attente d\'approbation par l\'administrateur. Tu pourras te connecter dès qu\'elle sera acceptée.');
+      if (e.actif) session = { id: e.identifiant, role: 'enseignant', nom: e.nom };
+    }
   }
   if (!session) {
     cache.put(cleEchecs, String(echecs + 1), 300);
@@ -218,9 +246,11 @@ function txt_(v, max) {
 
 /* ================= Enseignants ================= */
 function lireEnseignants_() {
-  return valeurs_(feuille_(F_ENS, E_ENS), 6).filter(function (r) { return r[0]; }).map(function (r, i) {
+  return valeurs_(feuille_(F_ENS, E_ENS), 9).filter(function (r) { return r[0]; }).map(function (r, i) {
     return { ligne: i + 2, identifiant: String(r[0]).trim().toLowerCase(), nom: String(r[1]), hash: String(r[2]), sel: String(r[3]),
-             actif: r[4] === true || String(r[4]).toUpperCase() === 'TRUE' || String(r[4]).toLowerCase() === 'oui' };
+             actif: r[4] === true || String(r[4]).toUpperCase() === 'TRUE' || String(r[4]).toLowerCase() === 'oui',
+             creeLe: r[5] instanceof Date ? r[5].toISOString() : String(r[5] || ''),
+             enAttente: String(r[6] || '').toLowerCase() === 'en attente', ecole: String(r[7] || ''), courriel: String(r[8] || '') };
   });
 }
 function trouverEnseignant_(id) {
@@ -230,7 +260,7 @@ function trouverEnseignant_(id) {
 function listeEnseignants_() {
   const groupes = listeGroupes_();
   return lireEnseignants_().map(function (e) {
-    return { identifiant: e.identifiant, nom: e.nom, actif: e.actif,
+    return { identifiant: e.identifiant, nom: e.nom, actif: e.actif, enAttente: e.enAttente, ecole: e.ecole, courriel: e.courriel, creeLe: e.creeLe,
              groupes: groupes.filter(function (g) { return g.enseignant === e.identifiant; }).map(function (g) { return g.groupe; }) };
   });
 }
@@ -259,6 +289,12 @@ function sauverEnseignant_(req) {
     if (!e) throw new Error('Enseignant introuvable.');
     if (nom) f.getRange(e.ligne, 2).setValue(txt_(nom));
     if (typeof req.actif === 'boolean') f.getRange(e.ligne, 5).setValue(req.actif);
+    if (req.actif === true && e.enAttente) { // approbation d'une demande
+      f.getRange(e.ligne, 7).setValue('approuvée le ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+      if (e.courriel) envoyerCourriel_(e.courriel, 'Algèbre² — ton compte enseignant est activé',
+        'Bonjour ' + e.nom + ',\n\nTon compte enseignant Algèbre² a été approuvé.\nIdentifiant : ' + e.identifiant + '\nNIP : celui que tu as choisi lors de ta demande.\n\n' +
+        'Tu peux maintenant te connecter à l\'espace enseignant et créer tes groupes (onglet « Mes groupes »).');
+    }
     if (req.pin) { if (!nipValide_(req.pin)) throw new Error('Le NIP doit contenir de 4 à 8 chiffres.'); definirNipEnseignant_(id, String(req.pin)); }
     return { ok: true };
   });
@@ -272,6 +308,44 @@ function supprimerEnseignant_(id) {
     feuille_(F_ENS, E_ENS).deleteRow(e.ligne);
     return { ok: true };
   });
+}
+
+/* ================= Demandes de comptes (inscription par l'enseignant, approbation par l'admin) ================= */
+function demanderCompte_(req) {
+  const id = String(req.identifiant || '').trim().toLowerCase();
+  const nom = String(req.nom || '').trim().slice(0, 60);
+  const ecole = String(req.ecole || '').trim().toUpperCase();
+  const courriel = String(req.courriel || '').trim().slice(0, 120);
+  if (!nom) throw new Error('Entre ton nom.');
+  if (!/^[a-z0-9._-]{2,20}$/.test(id)) throw new Error('Identifiant : 2 à 20 caractères (lettres minuscules, chiffres, point, tiret).');
+  if (id === ADMIN) throw new Error('L\'identifiant « admin » est réservé.');
+  if (!nipValide_(req.pin)) throw new Error('Le NIP doit contenir de 4 à 8 chiffres.');
+  if (courriel && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(courriel)) throw new Error('Adresse courriel invalide.');
+  const e = lireEcoles_().filter(function (x) { return x.id === ecole && x.actif; })[0];
+  if (!e) throw new Error('Choisis ton école.');
+  // Anti-pourriel : au plus 10 demandes par heure pour toute l'application
+  const cache = CacheService.getScriptCache();
+  const n = Number(cache.get('demandes_heure') || 0);
+  if (n >= 10) throw new Error('Trop de demandes en peu de temps. Réessaie dans une heure.');
+  verrou_(function () {
+    if (trouverEnseignant_(id)) throw new Error('Cet identifiant est déjà utilisé : choisis-en un autre.');
+    const sel = Utilities.getUuid();
+    feuille_(F_ENS, E_ENS).appendRow([id, txt_(nom), hacher_(sel + String(req.pin)), sel, false, new Date(), 'en attente', txt_(e.nom), txt_(courriel)]);
+  });
+  cache.put('demandes_heure', String(n + 1), 3600);
+  const dest = courrielAdmin_();
+  const lien = /^https:\/\/[^\s]+$/.test(String(req.lien || '')) ? String(req.lien).slice(0, 300) : '';
+  if (dest) envoyerCourriel_(dest, 'Algèbre² — nouvelle demande de compte enseignant : ' + nom,
+    'Une nouvelle demande de compte enseignant attend ton approbation.\n\n' +
+    'Nom : ' + nom + '\nIdentifiant : ' + id + '\nÉcole : ' + e.nom + (courriel ? '\nCourriel : ' + courriel : '') +
+    '\nDate : ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + '\n\n' +
+    'Pour l\'approuver ou la refuser : espace enseignant (identifiant admin) › onglet « Enseignants » › Demandes en attente.' +
+    (lien ? '\n' + lien : ''));
+  return { ok: true };
+}
+function envoyerCourriel_(dest, sujet, corps) {
+  try { MailApp.sendEmail({ to: dest, subject: sujet, body: corps, name: 'Algèbre²' }); return true; }
+  catch (err) { console.warn('Courriel non envoyé : ' + err); return false; } // la demande est quand même enregistrée
 }
 
 /* ================= Groupes ================= */

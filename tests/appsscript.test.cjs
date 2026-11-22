@@ -30,10 +30,12 @@ const ctx = {
   PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
   CacheService: { getScriptCache: () => ({ get: (k) => cache[k] || null, put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; } }) },
   LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-  Utilities: { getUuid: () => crypto.randomUUID(), DigestAlgorithm: { SHA_256: 1 }, Charset: { UTF_8: 1 },
+  Utilities: { formatDate: (d) => d.toISOString().slice(0, 16).replace('T', ' '), getUuid: () => crypto.randomUUID(), DigestAlgorithm: { SHA_256: 1 }, Charset: { UTF_8: 1 },
     computeDigest: (_, s) => [...crypto.createHash('sha256').update(s).digest()], base64Encode: (b) => Buffer.from(b).toString('base64') },
   ContentService: { MimeType: { JSON: 1 }, createTextOutput: (s) => ({ s, setMimeType() { return this; } }) },
   Logger: { log() {} }, console,
+  MailApp: { sendEmail: (o) => { ctx._courriels.push(o); } }, _courriels: [],
+  Session: { getEffectiveUser: () => ({ getEmail: () => 'proprietaire@css.qc.ca' }), getScriptTimeZone: () => 'America/Toronto' },
 };
 vm.createContext(ctx);
 vm.runInContext(src, ctx);
@@ -82,6 +84,23 @@ r = call('deleteGroup', { token: tR, groupe: 'ESL-201', resultatsSeulement: true
 ok('groupe gardé', call('listGroups', { token: tR }).groupes.length === 1);
 ok('supprimer groupe', call('deleteGroup', { token: tR, groupe: 'ESL-201' }).ok && sheets['Élèves'].rows.length === 1);
 ok('désactiver', call('saveTeacher', { token: tA, identifiant: 'mroy', actif: false }).ok && !call('whoami', { token: tR }).ok);
+// Demande de compte (option A : approbation par l'administrateur + courriel)
+r = call('teacherSignup', { nom: 'M. Gagnon', identifiant: 'pgagnon', pin: '2580', ecole: 'ESL', courriel: 'pg@ecole.ca', lien: 'https://exemple.github.io/algebre-sec2/enseignant.html' });
+ok('demande', r.ok, r);
+ok('courriel admin', ctx._courriels.length === 1 && ctx._courriels[0].to === 'proprietaire@css.qc.ca' && /pgagnon/.test(ctx._courriels[0].body), ctx._courriels);
+ok('identifiant pris', !call('teacherSignup', { nom: 'X', identifiant: 'pgagnon', pin: '1234', ecole: 'ESL' }).ok);
+ok('école requise', !call('teacherSignup', { nom: 'X', identifiant: 'xx', pin: '1234', ecole: 'ZZZ' }).ok);
+r = call('login', { identifiant: 'pgagnon', pin: '2580' }); ok('en attente', !r.ok && /attente/.test(r.error), r);
+r = call('listTeachers', { token: tA }); ok('visible admin', r.enseignants.some(e => e.identifiant === 'pgagnon' && e.enAttente && e.ecole === 'École du Lac'), r);
+ok('approbation', call('saveTeacher', { token: tA, identifiant: 'pgagnon', actif: true }).ok);
+ok('courriel enseignant', ctx._courriels.length === 2 && ctx._courriels[1].to === 'pg@ecole.ca');
+ok('connexion après approbation', call('login', { identifiant: 'pgagnon', pin: '2580' }).ok);
+ok('plus en attente', !call('listTeachers', { token: tA }).enseignants.find(e => e.identifiant === 'pgagnon').enAttente);
+call('teacherSignup', { nom: 'Faux', identifiant: 'faux', pin: '1111', ecole: 'ESL' });
+ok('refus', call('deleteTeacher', { token: tA, identifiant: 'faux' }).ok && !call('login', { identifiant: 'faux', pin: '1111' }).ok);
+ctx.PropertiesService.getScriptProperties().setProperty('COURRIEL_ADMIN', 'daniel@css.qc.ca');
+call('teacherSignup', { nom: 'Y', identifiant: 'yy', pin: '1111', ecole: 'PDR' });
+ok('courriel configuré', ctx._courriels[ctx._courriels.length - 1].to === 'daniel@css.qc.ca');
 for (let i = 0; i < 5; i++) call('login', { identifiant: 'zz', pin: '0' });
 ok('blocage', /Trop/.test(call('login', { identifiant: 'zz', pin: '0' }).error));
 console.log(fail ? `${fail} échec(s)` : 'Apps Script : tous les tests passent ✔');
