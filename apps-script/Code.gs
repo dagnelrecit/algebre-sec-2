@@ -51,6 +51,7 @@ function onOpen() {
     .addItem('1. Préparer la feuille', 'preparerFeuille')
     .addItem('2. Définir ou changer le NIP administrateur', 'definirNip')
     .addItem('3. Courriel pour les demandes de comptes', 'definirCourriel')
+    .addItem('4. Tester l\'envoi d\'un courriel', 'testerCourriel')
     .addToUi();
 }
 
@@ -65,7 +66,7 @@ function preparerFeuille() {
   });
   const defaut = ss.getSheetByName('Feuille 1') || ss.getSheetByName('Sheet1');
   if (defaut && defaut.getLastRow() === 0 && ss.getSheets().length > 5) ss.deleteSheet(defaut);
-  SpreadsheetApp.getUi().alert('✅ Feuille prête (Tentatives, Écoles, Groupes, Enseignants, Élèves).\n\n' +
+  SpreadsheetApp.getUi().alert('✅ Feuille prête — script version 3 (Tentatives, Écoles, Groupes, Enseignants avec les colonnes des demandes de comptes, Élèves).\n\n' +
     'Si ce n\'est pas déjà fait : menu « Algèbre² » > « 2. Définir ou changer le NIP administrateur ».\n\n' +
     'Ensuite, dans l\'espace enseignant du site (identifiant : admin) : crée les écoles, puis les comptes enseignants.');
 }
@@ -89,6 +90,20 @@ function definirCourriel() {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c)) { ui.alert('Adresse invalide. Recommence.'); return; }
   PropertiesService.getScriptProperties().setProperty('COURRIEL_ADMIN', c);
   ui.alert('📧 Les demandes de comptes seront envoyées à ' + c + '.');
+}
+/** Menu 4 : affiche l'adresse utilisée et envoie un courriel d'essai. */
+function testerCourriel() {
+  const ui = SpreadsheetApp.getUi();
+  const dest = courrielAdmin_();
+  const source = PropertiesService.getScriptProperties().getProperty('COURRIEL_ADMIN') ? 'définie avec le menu 3' : 'par défaut : propriétaire de la feuille';
+  if (!dest) { ui.alert('Aucune adresse trouvée. Utilise le menu « 3. Courriel pour les demandes de comptes ».'); return; }
+  try {
+    MailApp.sendEmail({ to: dest, subject: 'Algèbre² — courriel d\'essai', body: 'Si tu lis ce message, les avis de demandes de comptes enseignants fonctionnent.', name: 'Algèbre²' });
+    ui.alert('📧 Courriel d\'essai envoyé à : ' + dest + '\n(adresse ' + source + ')\n\nCourriels encore permis aujourd\'hui : ' + MailApp.getRemainingDailyQuota() +
+      '\n\nS\'il n\'arrive pas d\'ici quelques minutes, regarde dans les courriels indésirables (ou la quarantaine de ton centre de services).');
+  } catch (err) {
+    ui.alert('❌ Envoi impossible vers ' + dest + '\n\nRaison : ' + err.message + '\n\nSi le message parle d\'autorisation, relance ce menu et accepte l\'accès « Envoyer des courriels en votre nom ».');
+  }
 }
 function courrielAdmin_() {
   const p = PropertiesService.getScriptProperties().getProperty('COURRIEL_ADMIN');
@@ -117,7 +132,7 @@ function traiter_(req) {
   try {
     // ---- Actions publiques (élèves)
     switch (req.action) {
-      case 'ping':            return { ok: true, message: 'Le script fonctionne.', app: 'algebre2', version: 2 };
+      case 'ping':            return { ok: true, message: 'Le script fonctionne.', app: 'algebre2', version: 3, demandesDeComptes: true };
       case 'getSchools':      return { ok: true, ecoles: lireEcoles_().filter(function (e) { return e.actif; }).map(function (e) { return { id: e.id, nom: e.nom }; }) };
       case 'studentCheck':    return verifierEleve_(req.code);
       case 'studentRegister': return inscrireEleve_(req.code, req.pin);
@@ -246,7 +261,9 @@ function txt_(v, max) {
 
 /* ================= Enseignants ================= */
 function lireEnseignants_() {
-  return valeurs_(feuille_(F_ENS, E_ENS), 9).filter(function (r) { return r[0]; }).map(function (r, i) {
+  const f = feuille_(F_ENS, E_ENS);
+  if (!lireEnseignants_.verifie) { completerEntetes_(f, E_ENS); lireEnseignants_.verifie = true; } // ajoute G, H, I si absentes
+  return valeurs_(f, 9).filter(function (r) { return r[0]; }).map(function (r, i) {
     return { ligne: i + 2, identifiant: String(r[0]).trim().toLowerCase(), nom: String(r[1]), hash: String(r[2]), sel: String(r[3]),
              actif: r[4] === true || String(r[4]).toUpperCase() === 'TRUE' || String(r[4]).toLowerCase() === 'oui',
              creeLe: r[5] instanceof Date ? r[5].toISOString() : String(r[5] || ''),

@@ -31,6 +31,8 @@ export function buildKeyboard(input, { vars = [], mode = 'expr' } = {}) {
   const key = (label, action, cls = '', title = '', span = 1) => {
     const b = h('button', { type: 'button', class: `k ${cls}`, title: title || label, 'aria-label': title || label }, label);
     if (span > 1) b.style.gridColumn = `span ${span}`;
+    if (cls.includes('k-vide')) { b.style.visibility = 'hidden'; b.tabIndex = -1; }
+    b.style.minHeight = '46px';
     b.addEventListener('pointerdown', (ev) => ev.preventDefault()); // garde le focus dans le champ
     b.addEventListener('click', action);
     return b;
@@ -57,6 +59,11 @@ export function buildKeyboard(input, { vars = [], mode = 'expr' } = {}) {
 
   // Pavé en grille, comme une calculatrice
   const grid = h('div', { class: 'kgrid' });
+  // Disposition en grille écrite directement ici : le clavier reste correct même si le navigateur
+  // garde temporairement une ancienne version de style.css en cache.
+  const cols = mode === 'expr' ? 5 : 4;
+  Object.assign(grid.style, { display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '.35rem' });
+  if (cols === 4) grid.style.maxWidth = '420px';
   const add = (...ks) => ks.forEach((k) => grid.appendChild(k));
   if (mode === 'expr') {          // 5 colonnes
     add(num('7'), num('8'), num('9'), op('+', '+'), DEL());
