@@ -235,7 +235,12 @@ input, select { font: inherit; color: var(--ink); }
 .mathkb { display: flex; flex-direction: column; gap: .4rem; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: .5rem; margin-top: .3rem; transition: opacity .2s; }
 .mathkb.dim { opacity: .35; pointer-events: none; }
 .krow { display: flex; flex-wrap: wrap; gap: .35rem; }
-.k { flex: 1 0 44px; min-height: 44px; border: 1px solid var(--line); background: var(--white); border-radius: 10px; font-size: 1.1rem; font-weight: 600; cursor: pointer; color: var(--ink); touch-action: manipulation; }
+.krow .k { flex: 1 0 40px; }
+.kgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .35rem; }
+.mathkb-number .kgrid, .mathkb-int .kgrid { grid-template-columns: repeat(4, 1fr); max-width: 420px; }
+.kgrid .k { min-height: 46px; }
+.k-vide { visibility: hidden; pointer-events: none; }
+.k { min-height: 44px; border: 1px solid var(--line); background: var(--white); border-radius: 10px; font-size: 1.1rem; font-weight: 600; cursor: pointer; color: var(--ink); touch-action: manipulation; }
 .k:hover { border-color: var(--primary-2); }
 .k:active { background: var(--primary-soft); }
 .k-var { font-family: Georgia, serif; font-style: italic; font-size: 1.25rem; color: var(--primary); background: var(--primary-soft); }
@@ -428,3 +433,23 @@ input, select { font: inherit; color: var(--ink); }
 .muted-inv { opacity: .85; font-weight: 400; }
 .compteur { display: inline-grid; place-items: center; min-width: 1.4em; height: 1.4em; padding: 0 .35em; border-radius: 999px; background: var(--accent); color: #fff; font-size: .75rem; margin-left: .25rem; }
 .demandes { border-top: 4px solid var(--accent); }
+
+/* ---------- Cellulaire : en-tête compact et non collant (ne cache plus la question) ---------- */
+@media (max-width: 640px) {
+  .topbar { position: static; padding: .45rem .7rem; gap: .35rem; }
+  .logo { width: 32px; height: 32px; font-size: 1.05rem; border-radius: 10px; }
+  .brand-text b { font-size: .95rem; }
+  .top-right { gap: .3rem; }
+  .badge { font-size: .74rem; padding: .2rem .55rem; }
+  .btn-icone { min-width: 34px; height: 34px; }
+  .topnav .btn { min-height: 32px; font-size: .78rem; padding: .2rem .5rem; }
+  main { padding: .7rem; }
+  .card { padding: .9rem; border-radius: 14px; }
+  .qprompt { font-size: 1.02rem; }
+  .qtex { font-size: 1.15rem; padding: .5rem .2rem .7rem; }
+  .answer-input { font-size: 1.2rem; padding: .55rem .7rem; }
+  .k { font-size: 1.05rem; }
+  .kgrid .k { min-height: 48px; }
+  .footer { font-size: .72rem; padding: .7rem; }
+  .drill-top { gap: .5rem; }
+}
