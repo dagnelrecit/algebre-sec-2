@@ -30,12 +30,13 @@ const F_ENS = 'Enseignants';
 const F_GRP = 'Groupes';
 const F_ECOLES = 'Écoles';
 const F_ELEVES = 'Élèves';
-const E_RES = ['Date', 'Code', 'Groupe', 'Module', 'Thème', 'Niveau', 'Question', 'Réponse de l\'élève', 'Réponse attendue', 'Résultat (1 = 1er essai, 2 = 2e essai, 0 = échec)', 'Essais', 'Temps (s)', 'Série', 'Mode', 'ID'];
+const E_RES = ['Date', 'Code', 'Groupe', 'Module', 'Thème', 'Niveau', 'Question', 'Réponse de l\'élève', 'Réponse attendue', 'Résultat (1 = 1er essai, 2 = 2e essai, 0 = échec)', 'Essais', 'Temps (s)', 'Série', 'Mode', 'ID', 'Erreur diagnostiquée'];
 const E_ENS = ['Identifiant', 'Nom', 'Empreinte du NIP (ne pas modifier)', 'Sel (ne pas modifier)', 'Actif', 'Créé le', 'Demande (en attente = à approuver)', 'École indiquée', 'Courriel (facultatif)'];
 const E_GRP = ['Groupe (ÉCOLE-numéro)', 'Enseignant (identifiant)', 'Créé le'];
 const E_ECOLES = ['ID (ne pas modifier)', 'Nom', 'Active', 'Créée le'];
 const E_ELEVES = ['Code', 'Empreinte du NIP (ne pas modifier)', 'Sel (ne pas modifier)', 'Jetons (ne pas modifier)', 'Progression (ne pas modifier)', 'Mise à jour', 'Créé le'];
 const NB_RES = E_RES.length;
+const COL_ID = 15; // colonne O : identifiant unique de la tentative (ne jamais déplacer)
 const MODULES = ['m1', 'm2', 'm3', 'm4', 'm5'];
 const RX_ECOLE = /^[A-Z0-9]{2,6}$/;
 const RX_GROUPE = /^[A-Z0-9]{2,6}-\d{1,4}$/;
@@ -60,13 +61,14 @@ function preparerFeuille() {
   const feuilles = [feuille_(F_RES, E_RES), feuille_(F_ECOLES, E_ECOLES), feuille_(F_GRP, E_GRP), feuille_(F_ENS, E_ENS), feuille_(F_ELEVES, E_ELEVES)];
   feuilles[0].getRange('A:A').setNumberFormat('yyyy-mm-dd hh:mm');
   completerEntetes_(feuilles[3], E_ENS); // colonnes ajoutées pour les demandes de comptes
+  completerEntetes_(feuilles[0], E_RES); // colonne P : erreur diagnostiquée
   feuilles.forEach(function (f) {
     f.setFrozenRows(1);
     f.getRange(1, 1, 1, f.getLastColumn()).setFontWeight('bold').setBackground('#eef0ff');
   });
   const defaut = ss.getSheetByName('Feuille 1') || ss.getSheetByName('Sheet1');
   if (defaut && defaut.getLastRow() === 0 && ss.getSheets().length > 5) ss.deleteSheet(defaut);
-  SpreadsheetApp.getUi().alert('✅ Feuille prête — script version 3 (Tentatives, Écoles, Groupes, Enseignants avec les colonnes des demandes de comptes, Élèves).\n\n' +
+  SpreadsheetApp.getUi().alert('✅ Feuille prête — script version 4 (Tentatives, Écoles, Groupes, Enseignants avec les colonnes des demandes de comptes, Élèves).\n\n' +
     'Si ce n\'est pas déjà fait : menu « Algèbre² » > « 2. Définir ou changer le NIP administrateur ».\n\n' +
     'Ensuite, dans l\'espace enseignant du site (identifiant : admin) : crée les écoles, puis les comptes enseignants.');
 }
@@ -132,7 +134,7 @@ function traiter_(req) {
   try {
     // ---- Actions publiques (élèves)
     switch (req.action) {
-      case 'ping':            return { ok: true, message: 'Le script fonctionne.', app: 'algebre2', version: 3, demandesDeComptes: true };
+      case 'ping':            return { ok: true, message: 'Le script fonctionne.', app: 'algebre2', version: 4, demandesDeComptes: true, erreursDiagnostiquees: true };
       case 'getSchools':      return { ok: true, ecoles: lireEcoles_().filter(function (e) { return e.actif; }).map(function (e) { return { id: e.id, nom: e.nom }; }) };
       case 'studentCheck':    return verifierEleve_(req.code);
       case 'studentRegister': return inscrireEleve_(req.code, req.pin);
@@ -472,11 +474,12 @@ function enregistrerTentatives_(liste, codeSession) {
   const nombre = function (x, max) { const v = Number(x); return isFinite(v) ? Math.max(0, Math.min(max, v)) : 0; };
   return verrou_(function () {
     const f = feuille_(F_RES, E_RES);
+    if (!enregistrerTentatives_.entetes) { completerEntetes_(f, E_RES); enregistrerTentatives_.entetes = true; }
     const der = f.getLastRow();
     const deja = {};
     if (der > 1) { // évite les doublons d'un envoi hors-ligne réessayé
       const debut = Math.max(2, der - 3000);
-      f.getRange(debut, NB_RES, der - debut + 1, 1).getValues().forEach(function (r) { deja[r[0]] = true; });
+      f.getRange(debut, COL_ID, der - debut + 1, 1).getValues().forEach(function (r) { deja[r[0]] = true; });
     }
     const lignes = [], recus = [];
     liste.slice(0, 100).forEach(function (a) {
@@ -488,7 +491,7 @@ function enregistrerTentatives_(liste, codeSession) {
       const date = new Date(a.date);
       lignes.push([isNaN(date) ? new Date() : date, code, "'" + groupe, MODULES.indexOf(a.module) >= 0 ? a.module : '', txt_(a.theme, 20), txt_(a.niveau, 10),
         txt_(a.question, 400), txt_(a.reponse, 200), txt_(a.attendu, 200), nombre(a.resultat, 2), nombre(a.essais, 9), nombre(a.temps, 36000),
-        txt_(a.serie, 40), txt_(a.mode, 12), id]);
+        txt_(a.serie, 40), txt_(a.mode, 12), id, /^[a-zA-Z]{0,30}$/.test(String(a.erreur || '')) ? String(a.erreur || '') : '']);
     });
     if (lignes.length) f.getRange(der + 1, 1, lignes.length, NB_RES).setValues(lignes);
     return { ok: true, recus: recus };
@@ -507,7 +510,7 @@ function lireResultats_(s) {
       return {
         date: r[0] instanceof Date ? r[0].toISOString() : String(r[0]), code: String(r[1]), groupe: String(r[2]).trim(),
         module: String(r[3]), theme: String(r[4]), niveau: String(r[5]), question: String(r[6]), reponse: String(r[7]), attendu: String(r[8]),
-        resultat: Number(r[9]) || 0, essais: Number(r[10]) || 0, temps: Number(r[11]) || 0, mode: String(r[13])
+        resultat: Number(r[9]) || 0, essais: Number(r[10]) || 0, temps: Number(r[11]) || 0, mode: String(r[13]), erreur: String(r[15] || '')
       };
     });
 }

@@ -8,6 +8,7 @@ import { h, escapeHtml as e, toast, fmtDuree, fmtDate, pct } from './ui/render.j
 import * as S from './storage.js';
 import * as B from './badges.js';
 import { surveillerMisesAJour } from './maj.js';
+import { ERREURS } from './feedback.js';
 
 const app = document.getElementById('app');
 const T = {
@@ -269,6 +270,7 @@ async function ficheEleve(code, lignes) {
   box.innerHTML = `<div class="card detail">
     <div class="card-head"><h2>${e(ini(code))} — ${e(nomGroupe((S.decouperCode(code) || {}).groupe || ''))}</h2><button class="btn btn-ghost" id="fermer">Fermer</button></div>
     ${S.LOCAL ? '' : '<p id="etatCompte" class="muted">Vérification du compte…</p>'}
+    ${(() => { const l = erreursFrequentes(miens); return l.length ? `<h3>💡 Ses erreurs fréquentes</h3>${erreursHtml(l, false)}` : ''; })()}
     <div class="t-grid">
       <div><h3>Par thème</h3><table class="tbl"><thead><tr><th>Thème</th><th>Essais</th><th>Réussite</th><th>Temps moy.</th></tr></thead><tbody>
         ${Object.entries(themes).sort().map(([k, t]) => { const r = pct(t.ok, t.n); return `<tr><td>${e(etiquetteTheme(k))}</td><td>${t.n}</td><td><span class="rate ${tauxClasse(r)}">${r} %</span></td><td>${fmtDuree(t.t / t.n)}</td></tr>`; }).join('')}
@@ -293,6 +295,23 @@ async function ficheEleve(code, lignes) {
   } catch (err) { box.querySelector('#etatCompte').textContent = err.message; }
 }
 
+/* ---------- Erreurs fréquentes (diagnostiquées par l'application) ---------- */
+function erreursFrequentes(lignes) {
+  const par = {};
+  lignes.forEach((a) => {
+    if (!a.erreur || !ERREURS[a.erreur]) return;
+    const x = par[a.erreur] = par[a.erreur] || { code: a.erreur, n: 0, eleves: new Set() };
+    x.n++; x.eleves.add(a.code);
+  });
+  return Object.values(par).sort((a, b) => b.n - a.n);
+}
+function erreursHtml(liste, avecEleves = true) {
+  if (!liste.length) return '<p class="muted">Aucune erreur fréquente reconnue pour ces filtres. (Les réponses enregistrées avant cette mise à jour n\'ont pas de diagnostic.)</p>';
+  const max = liste[0].n;
+  return `<ul class="hard erreurs">${liste.slice(0, 8).map((x) => { const info = ERREURS[x.code]; return `<li><span><b>${e(info.nom.charAt(0).toUpperCase() + info.nom.slice(1))}</b><br><span class="muted small">${e(info.msg)}</span></span>
+    <span class="mini-bar"><span style="width:${Math.round((100 * x.n) / max)}%"></span></span><b>${x.n}×${avecEleves ? `<br><span class="muted small">${x.eleves.size} élève${x.eleves.size > 1 ? 's' : ''}</span>` : ''}</b></li>`; }).join('')}</ul>`;
+}
+
 /* ---------- 🔥 Thèmes difficiles ---------- */
 function ongletThemes() {
   const corps = document.getElementById('corps');
@@ -304,7 +323,11 @@ function ongletThemes() {
   const lignesThemes = cles.map((k) => ({ k, ...stat((a) => `${a.module}/${a.theme}` === k) })).filter((x) => x.n);
   const pires = [...lignesThemes].filter((x) => x.n >= 5).sort((a, b) => a.ok / a.n - b.ok / b.n).slice(0, 8);
   corps.innerHTML = `${filtresHtml()}
-    <div class="card"><h2>À cibler en mini-leçon</h2>
+    <div class="card"><h2>💡 Erreurs fréquentes${T.f.groupe ? ` — ${e(nomGroupe(T.f.groupe))}` : ''}</h2>
+      <p class="muted small">Erreurs reconnues avec certitude par l'application dans les réponses des élèves. Choisis un groupe dans les filtres pour préparer ta mini-leçon.</p>
+      ${erreursHtml(erreursFrequentes(lignes))}
+    </div>
+    <div class="card"><h2>Thèmes à cibler en mini-leçon</h2>
       ${pires.length ? `<ul class="hard">${pires.map((x) => { const r = pct(x.ok, x.n); return `<li><span>${e(etiquetteTheme(x.k))} <span class="muted small">(${x.n} essais)</span></span><span class="mini-bar"><span style="width:${r}%"></span></span><b>${r} %</b></li>`; }).join('')}</ul>` : '<p class="muted">Pas encore assez de données (5 essais par thème).</p>'}
     </div>
     <div class="card"><h2>Carte de chaleur : thème × groupe</h2>
@@ -459,9 +482,9 @@ const jour = () => new Date().toISOString().slice(0, 10);
 function exporterDetail(lignes) {
   const res = { 0: 'Échec', 1: 'Réussi (1er essai)', 2: 'Réussi (2e essai)' };
   telecharger(`algebre-detaille-${jour()}.csv`, [
-    ['Date', 'Groupe', 'Élève (code)', 'Module', 'Thème', 'Niveau', 'Question', 'Réponse de l\'élève', 'Réponse attendue', 'Résultat', 'Essais', 'Temps (s)', 'Mode'],
+    ['Date', 'Groupe', 'Élève (code)', 'Module', 'Thème', 'Niveau', 'Question', 'Réponse de l\'élève', 'Réponse attendue', 'Résultat', 'Essais', 'Temps (s)', 'Mode', 'Erreur diagnostiquée'],
     ...lignes.map((a) => [fmtDate(a.date), nomGroupe(a.groupe), a.code, `M${MODULE_BY_ID[a.module]?.num || ''} ${MODULE_BY_ID[a.module]?.titre || a.module}`, themeLabel(a.module, a.theme), a.niveau,
-      String(a.question).replace(/^'/, ''), String(a.reponse).replace(/^'/, ''), String(a.attendu).replace(/^'/, ''), res[a.resultat] ?? a.resultat, a.essais, a.temps, a.mode])]);
+      String(a.question).replace(/^'/, ''), String(a.reponse).replace(/^'/, ''), String(a.attendu).replace(/^'/, ''), res[a.resultat] ?? a.resultat, a.essais, a.temps, a.mode, a.erreur && ERREURS[a.erreur] ? ERREURS[a.erreur].nom : ''])]);
 }
 function exporterSommaire(rangs) {
   telecharger(`algebre-sommaire-${jour()}.csv`, [

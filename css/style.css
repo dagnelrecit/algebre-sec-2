@@ -462,3 +462,4 @@ input, select { font: inherit; color: var(--ink); }
 .prochaine.reussite { border-left-color: var(--ok); }
 .pe-texte { font-weight: 700; font-size: 1.05rem; }
 #etapeBox .steps { margin-top: .5rem; }
+.hard.erreurs li { grid-template-columns: 1fr 60px 64px; align-items: start; padding: .3rem 0; border-bottom: 1px dashed var(--line); }

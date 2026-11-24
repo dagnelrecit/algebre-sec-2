@@ -65,11 +65,16 @@ ok('usurpation', !call('studentRegister', { code: 'ESL-201-DL', pin: '2222' }).o
 ok('mauvais NIP élève', !call('studentLogin', { code: 'ESL-201-DL', pin: '2222' }).ok);
 const att = (id, extra = {}) => ({ id, date: new Date().toISOString(), module: 'm2', theme: 'addsous', niveau: 1, question: 'Réduis', reponse: '-3x+2', attendu: '=1+1', resultat: 1, essais: 1, temps: 12, serie: 's', mode: 'module', ...extra });
 r = call('submit', { code: 'ESL-201-DL', token: tok, tentatives: [att('a1'), att('a2', { resultat: 0 })] }); ok('submit', r.ok && r.recus.length === 2, r);
-call('submit', { code: 'ESL-201-DL', token: tok, tentatives: [att('a1')] }); ok('doublon', sheets.Tentatives.rows.length === 3, sheets.Tentatives.rows.length);
+ok('colonne P ajoutée', sheets.Tentatives.rows[0][15] === 'Erreur diagnostiquée', sheets.Tentatives.rows[0]);
+call('submit', { code: 'ESL-201-DL', token: tok, tentatives: [att('a9', { resultat: 0, erreur: 'moinsParen' }), att('a10', { erreur: '=HACK()' })] });
+ok('erreur enregistrée', sheets.Tentatives.rows.some(r => r[14] === 'a9' && r[15] === 'moinsParen'));
+ok('erreur invalide ignorée', sheets.Tentatives.rows.some(r => r[14] === 'a10' && r[15] === ''));
+ok('doublon via colonne ID', (call('submit', { code: 'ESL-201-DL', token: tok, tentatives: [att('a9')] }), sheets.Tentatives.rows.filter(r => r[14] === 'a9').length === 1));
+call('submit', { code: 'ESL-201-DL', token: tok, tentatives: [att('a1')] }); ok('doublon', sheets.Tentatives.rows.length === 5, sheets.Tentatives.rows.length);
 ok('mauvais jeton', !call('submit', { code: 'ESL-201-DL', token: 'x', tentatives: [att('a3')] }).ok);
 ok('progression', call('saveProgress', { code: 'ESL-201-DL', token: tok, progression: { n: 2 } }).ok);
 r = call('studentLogin', { code: 'ESL-201-DL', pin: '1111' }); ok('reconnexion + progression', r.ok && r.progression.n === 2, r);
-r = call('getResults', { token: tR }); ok('résultats ens', r.lignes.length === 2 && r.lignes[0].module === 'm2' && r.lignes[0].attendu === "'=1+1".slice(1), r.lignes[0]);
+r = call('getResults', { token: tR }); ok('erreur relue', r.lignes.some(l => l.erreur === 'moinsParen')); ok('résultats ens', r.lignes.length === 4 && r.lignes[0].module === 'm2' && r.lignes[0].attendu === "'=1+1".slice(1), r.lignes[0]);
 r = call('listGroups', { token: tR }); ok('groupes ens', r.groupes.length === 1 && !r.enseignants);
 r = call('listGroups', { token: tA }); ok('groupes admin', r.groupes.length === 2 && r.enseignants.length === 1);
 ok('info élève', call('studentInfo', { token: tR, code: 'ESL-201-DL' }).nipDefini);
@@ -80,7 +85,7 @@ ok('nouveau NIP', call('studentRegister', { code: 'ESL-201-DL', pin: '5555' }).o
 ok('ens non admin', !call('listTeachers', { token: tR }).ok);
 ok('changer NIP', call('changePin', { token: tR, nouveau: '7777' }).ok && call('login', { identifiant: 'mroy', pin: '7777' }).ok);
 ok('suppr ens avec groupes refusée', !call('deleteTeacher', { token: tA, identifiant: 'mroy' }).ok);
-r = call('deleteGroup', { token: tR, groupe: 'ESL-201', resultatsSeulement: true }); ok('effacer résultats', r.ok && r.supprimees === 2, r);
+r = call('deleteGroup', { token: tR, groupe: 'ESL-201', resultatsSeulement: true }); ok('effacer résultats', r.ok && r.supprimees === 4, r);
 ok('groupe gardé', call('listGroups', { token: tR }).groupes.length === 1);
 ok('supprimer groupe', call('deleteGroup', { token: tR, groupe: 'ESL-201' }).ok && sheets['Élèves'].rows.length === 1);
 ok('désactiver', call('saveTeacher', { token: tA, identifiant: 'mroy', actif: false }).ok && !call('whoami', { token: tR }).ok);

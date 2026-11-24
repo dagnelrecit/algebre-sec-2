@@ -561,7 +561,7 @@ function finish(success, input, r) {
   const att = {
     id: store.uid(), date: new Date().toISOString(), module: q.module, theme: q.theme, themeLabel: q.themeLabel,
     niveau: q.module === 'm5' ? q.theme : q.difficulty, question: questionText(q), reponse: answerToText(q, input).slice(0, 200),
-    attendu: expectedText(q).slice(0, 200), resultat, essais: q.attempts, temps, serie: S.id, mode: S.cfg.mode,
+    attendu: expectedText(q).slice(0, 200), resultat, essais: q.attempts, temps, serie: S.id, mode: S.cfg.mode, erreur: q.diag1 || '',
   };
   store.enregistrerTentative(state.eleve.code, att);
   store.ajouterAuProfil(state.profil, att);

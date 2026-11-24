@@ -113,6 +113,7 @@ export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfy…/exe
 - **Quelle est la suite?** Le bilan propose **une seule prochaine étape** (l'erreur la plus fréquente de la série ou le thème à revoir), avec un bouton **Pratiquer ce point (5 questions)**.
 - Les félicitations sont brèves et portent sur la stratégie (« Bonne gestion des signes »).
 - Tous les textes (intentions, indices, messages d'erreurs) sont modifiables dans `js/feedback.js`.
+- **Pour l'enseignant :** chaque erreur reconnue est enregistrée (colonne P « Erreur diagnostiquée » de l'onglet *Tentatives*). L'onglet **🔥 Thèmes difficiles** affiche les **erreurs fréquentes** (filtrables par groupe), avec le nombre d'élèves touchés. La fiche de chaque élève montre aussi ses erreurs fréquentes, et le CSV détaillé les inclut. Les réponses enregistrées avant cette fonction n'ont pas de diagnostic.
 
 ### 🏅 Récompenses (comme dans IrregularVerbs)
 - **XP** : 10 XP par bonne réponse au 1er essai, 5 XP au 2e essai, +2 XP pour une question difficile. Une série terminée au complet rapporte 20 XP de bonus, et 20 XP de plus si tout est réussi du premier coup.

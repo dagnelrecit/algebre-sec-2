@@ -1,6 +1,6 @@
 /* Service worker : permet d'utiliser l'application hors ligne.
    Change VERSION après chaque mise à jour du site pour forcer le rafraîchissement. */
-const VERSION = 'alg2-v11';
+const VERSION = 'alg2-v12';
 const FICHIERS = ['./', './assets/icon-192.png','./assets/icon-512.png','./assets/icon.svg','./css/style.css','./data/enonces.js','./enseignant.html','./index.html','./js/app.js','./js/badges.js','./js/maj.js','./js/config.js','./js/feedback.js','./js/gen/figures.js','./js/gen/index.js','./js/gen/m1-anatomie.js','./js/gen/m2-reduction.js','./js/gen/m3-valeur.js','./js/gen/m4-modelisation.js','./js/gen/m5-equations.js','./js/gen/util.js','./js/math/check.js','./js/math/expr.js','./js/math/frac.js','./js/math/steps.js','./js/storage.js','./js/teacher.js','./js/ui/keyboard.js','./js/ui/render.js','./lib/katex/katex.min.css','./lib/katex/katex.min.js','./manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
