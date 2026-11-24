@@ -104,6 +104,16 @@ export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfy…/exe
 - **Correction tolérante** : l'ordre des termes est libre, la virgule décimale et `x = 4` sont acceptés, et `1x` est accepté avec un rappel. Une réponse équivalente mais **non réduite** est signalée comme telle.
 - **Défi mixte** : il pige davantage dans les thèmes les moins réussis par l'élève. **M'exercer sur mes erreurs** propose de nouvelles questions semblables.
 
+### 💡 Rétroaction constructive (modèle de Hattie et Timperley)
+- **Où vais-je?** Pendant une série, l'intention d'apprentissage du thème est affichée (ex. « 🎯 Je suis capable de réduire une expression qui contient des parenthèses »).
+- **Où en suis-je?** Après une erreur, l'élève reçoit **une seule phrase** :
+  - un **diagnostic précis**, seulement si sa réponse correspond *exactement et sans ambiguïté* à une erreur fréquente connue (signe − devant une parenthèse, distributivité partielle, 3x + 2x = 5x², (−2)² négatif, opération inverse mal faite, division par un négatif, degré mal calculé…) ;
+  - sinon, un **indice de stratégie** général (ex. « Élimine d'abord les parenthèses, puis regroupe seulement les termes semblables ») : on n'affirme jamais une cause dont on n'est pas certain.
+  - Au 1er essai, un lien facultatif **« Voir la 1re étape »** donne un coup de pouce sans révéler la réponse. La démarche complète vient seulement après le 2e essai.
+- **Quelle est la suite?** Le bilan propose **une seule prochaine étape** (l'erreur la plus fréquente de la série ou le thème à revoir), avec un bouton **Pratiquer ce point (5 questions)**.
+- Les félicitations sont brèves et portent sur la stratégie (« Bonne gestion des signes »).
+- Tous les textes (intentions, indices, messages d'erreurs) sont modifiables dans `js/feedback.js`.
+
 ### 🏅 Récompenses (comme dans IrregularVerbs)
 - **XP** : 10 XP par bonne réponse au 1er essai, 5 XP au 2e essai, +2 XP pour une question difficile. Une série terminée au complet rapporte 20 XP de bonus, et 20 XP de plus si tout est réussi du premier coup.
 - **Niveaux** ⭐ : affichés en haut de l'écran, avec une jauge vers le niveau suivant.
@@ -187,6 +197,7 @@ node tests/generators.test.mjs   # génère des milliers de questions et vérifi
 node tests/engine.test.mjs       # moteur de correction
 node tests/appsscript.test.cjs   # script Google (simulé)
 node tests/badges.test.mjs       # XP, niveaux et badges
+node tests/feedback.test.mjs     # fiabilité des diagnostics d'erreurs
 ```
 
 ## ⚙️ Réglages (`js/config.js`)

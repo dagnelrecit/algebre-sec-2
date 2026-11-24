@@ -78,7 +78,7 @@ function genCoef(d) {
     const invisible = t.coef.abs().isOne();
     return makeQ({
       prompt: `Quel est le <b>coefficient</b> du ${rang(i + 1)} terme?`,
-      tex: termsLatex(terms), answerType: 'number', answer: t.coef, answerTex: t.coef.toLatex(),
+      tex: termsLatex(terms), answerType: 'number', answer: t.coef, answerTex: t.coef.toLatex(), diag: { type: 'coef', coef: t.coef },
       steps: [...base, { label: 'Le coefficient est le nombre qui multiplie les variables, avec son signe', tex: `${monoTex(t)} \\;\\rightarrow\\; ${t.coef.toLatex()}`, note: invisible ? `Coefficient invisible : ${t.coef.isNeg() ? '−x signifie −1x' : 'x signifie 1x'}.` : null, final: true }],
     });
   }
@@ -92,7 +92,7 @@ function genCoef(d) {
   const v = choice(Object.keys(t.vars));
   return makeQ({
     prompt: `Dans le ${rang(i + 1)} terme, quel est l'<b>exposant</b> de la variable \\(${v}\\)?`,
-    tex: termsLatex(terms), answerType: 'int', answer: t.vars[v], answerTex: String(t.vars[v]),
+    tex: termsLatex(terms), answerType: 'int', answer: t.vars[v], answerTex: String(t.vars[v]), diag: { type: 'exposant', exp: t.vars[v], v },
     steps: [...base, { label: 'L\'exposant est le petit nombre en haut à droite de la variable', tex: `${monoTex(t)} \\;\\rightarrow\\; ${v}^{${t.vars[v]}}`, note: t.vars[v] === 1 ? `Exposant invisible : ${v} signifie ${v}¹.` : null, final: true }],
   });
 }
@@ -104,7 +104,7 @@ function genConstant(d) {
   const val = c ? c.coef : new Frac(0);
   return makeQ({
     prompt: 'Quel est le <b>terme constant</b> de cette expression? <span class="muted">(écris 0 s\'il n\'y en a pas)</span>',
-    tex: termsLatex(terms), answerType: 'number', answer: val, answerTex: val.toLatex(),
+    tex: termsLatex(terms), answerType: 'number', answer: val, answerTex: val.toLatex(), diag: { type: 'constant', val },
     steps: [{ label: 'Le terme constant est le terme sans variable (avec son signe)', tex: c ? highlight(terms, terms.indexOf(c)) : termsLatex(terms) },
       { label: c ? 'Terme constant' : 'Aucun terme sans variable : le terme constant est 0', tex: val.toLatex(), final: true }],
   });
@@ -117,7 +117,7 @@ function genDegre(d) {
     const detail = Object.entries(t.vars).sort().map(([, e]) => e).join(' + ');
     return makeQ({
       prompt: 'Quel est le <b>degré</b> de ce monôme?',
-      tex: monoTex(t), answerType: 'int', answer: deg, answerTex: String(deg),
+      tex: monoTex(t), answerType: 'int', answer: deg, answerTex: String(deg), diag: { type: 'degreMonome', max: Math.max(...Object.values(t.vars)), coef: t.coef },
       steps: [{ label: 'Le degré d\'un monôme est la somme des exposants de ses variables', tex: `${monoTex(t)} \\;\\rightarrow\\; ${detail} = ${deg}`, note: 'Une variable sans exposant visible a l\'exposant 1.', final: true }],
     });
   }
@@ -126,7 +126,7 @@ function genDegre(d) {
   const deg = Math.max(...degs);
   return makeQ({
     prompt: 'Quel est le <b>degré</b> de ce polynôme?',
-    tex: termsLatex(terms), answerType: 'int', answer: deg, answerTex: String(deg),
+    tex: termsLatex(terms), answerType: 'int', answer: deg, answerTex: String(deg), diag: { type: 'degrePoly', somme: degs.reduce((a, b) => a + b, 0), nbTermes: terms.length },
     steps: [{ label: 'Degré de chaque terme', tex: terms.map((t, i) => `${monoTex(t)} : ${degs[i]}`).join(' \\quad ') },
       { label: 'Le degré d\'un polynôme est le plus grand degré de ses termes', tex: String(deg), final: true }],
   });

@@ -10,6 +10,7 @@ import { buildKeyboard, isTouch } from './ui/keyboard.js';
 import * as store from './storage.js';
 import * as B from './badges.js';
 import { surveillerMisesAJour } from './maj.js';
+import * as FB from './feedback.js';
 
 const LOCAL = store.LOCAL;
 
@@ -349,7 +350,7 @@ function startSeries(cfg) {
     if (cfg.moduleId === 'm5') plan.sort((a, b) => a.t.localeCompare(b.t));
   } else if (cfg.mode === 'mixte') {
     for (let i = 0; i < cfg.n; i++) plan.push(pickMixed(stats, cfg.modules));
-  } else if (cfg.mode === 'erreurs') {
+  } else if (cfg.mode === 'erreurs' || cfg.mode === 'cible') {
     cfg.items.forEach(it => plan.push(it));
   }
   state.series = {
@@ -387,6 +388,7 @@ function viewDrill() {
       <div class="streak ${S.streak >= 3 ? 'hot' : ''}" title="Bonnes réponses de suite">⚡ ${S.streak}</div>
     </div>
     <div class="progress"><span style="width:${progress}%"></span></div>
+    ${FB.INTENTIONS[`${q.module}/${q.theme}`] ? `<p class="intention">🎯 ${escapeHtml(FB.INTENTIONS[`${q.module}/${q.theme}`])}</p>` : ''}
     <article class="card qcard">
       <p class="qprompt">${inlineMath(q.prompt)}</p>
       ${q.tex ? `<div class="qtex">${texSpan(q.tex, true)}</div>` : ''}
@@ -483,10 +485,26 @@ function submit(input) {
   q.lastInput = typeof input === 'string' ? input : '';
   const max = CONFIG.ESSAIS_PAR_QUESTION;
   if (r.status === 'correct') { finish(true, input, r); return; }
+  // Rétroaction : diagnostic précis seulement s'il est sans ambiguïté, sinon indice de processus
+  const diag = FB.diagnostiquer(q, input);
+  if (diag && !q.diag1) q.diag1 = diag.code;
+  q.dernierDiag = diag;
   if (q.attempts < max) {
     fb.className = 'feedback fb-retry';
+    const conseil = diag ? diag.msg : (r.status === 'nonreduit' ? r.hint : (FB.indiceProcessus(q) || r.hint || 'Vérifie ta démarche et essaie encore.'));
+    const etape = FB.premiereEtape(q);
     fb.innerHTML = `<p class="fb-title">${pick(RETRY)} <span class="muted">Essai ${q.attempts + 1} sur ${max}</span></p>
-      ${r.hint ? `<p>${escapeHtml(r.hint)}</p>` : '<p>Vérifie ta démarche et essaie encore.</p>'}`;
+      ${r.status === 'nonreduit' && diag ? `<p>${escapeHtml(r.hint)}</p>` : ''}
+      <p class="fb-diag">💡 ${escapeHtml(conseil)}</p>
+      ${etape ? `<button type="button" class="link" id="voirEtape">Besoin d'un coup de pouce? Voir la 1<sup>re</sup> étape</button><div id="etapeBox"></div>` : ''}`;
+    const ve = document.getElementById('voirEtape');
+    if (ve) ve.onclick = () => {
+      q.indiceUtilise = true;
+      ve.remove();
+      document.getElementById('etapeBox').innerHTML = `<ol class="steps"><li><div class="step-label">${inlineMath(etape.label)}</div>${etape.tex ? `<div class="step-tex">${texSpan(etape.tex, true)}</div>` : ''}</li></ol>`;
+      renderMath(document.getElementById('etapeBox'));
+      const inp = document.getElementById('answer'); if (inp && !isTouch()) inp.focus();
+    };
     if (q.answerType === 'choice') {
       q.wrongChoices.add(input);
       const b = app.querySelector(`.choice[data-i="${input}"]`);
@@ -538,7 +556,7 @@ function finish(success, input, r) {
   q.done = true;
   const temps = Math.round((performance.now() - q.shownAt) / 1000);
   const resultat = success ? q.attempts : 0;
-  S.results.push({ q, success, resultat, input, temps });
+  S.results.push({ q, success, resultat, input, temps, diag: q.diag1 || null });
   if (success) { S.streak++; S.best = Math.max(S.best, S.streak); } else S.streak = 0;
   const att = {
     id: store.uid(), date: new Date().toISOString(), module: q.module, theme: q.theme, themeLabel: q.themeLabel,
@@ -580,13 +598,14 @@ function finish(success, input, r) {
   const notes = (r && r.notes) || [];
   if (success) {
     fb.className = 'feedback fb-ok';
-    fb.innerHTML = `<p class="fb-title">✓ ${pick(BRAVO)} ${q.attempts > 1 ? '<span class="muted">(au 2e essai)</span>' : ''} <span class="xp-gain">+${xp} XP</span></p>
+    const proc = q.attempts === 1 ? FB.felicitation(q) : null;
+    fb.innerHTML = `<p class="fb-title">✓ ${pick(BRAVO)} ${proc ? `<span class="fb-proc">${escapeHtml(proc)}</span>` : ''} ${q.attempts > 1 ? '<span class="muted">(au 2e essai)</span>' : ''} <span class="xp-gain">+${xp} XP</span></p>
       ${notes.map(n => `<p class="fb-note">${escapeHtml(n)}</p>`).join('')}
       <details class="steps-box"><summary>Voir la démarche</summary>${stepsHtml(q.steps)}</details>`;
   } else {
     fb.className = 'feedback fb-ko';
     fb.innerHTML = `<p class="fb-title">La bonne réponse : ${texSpan(q.answerTex || '')}</p>
-      ${r && r.hint ? `<p>${escapeHtml(r.hint)}</p>` : ''}
+      ${q.dernierDiag ? `<p class="fb-diag">💡 ${escapeHtml(q.dernierDiag.msg)}</p>` : (r && r.hint ? `<p>${escapeHtml(r.hint)}</p>` : '')}
       <div class="steps-box open"><p class="steps-head">Démarche étape par étape</p>${stepsHtml(q.steps)}</div>`;
   }
   const act = h('div', { class: 'actions' });
@@ -667,6 +686,10 @@ function viewSummary() {
       </div>
     </div>
     ${S.nouveauxBadges.length ? `<div class="card"><h2>🏅 Badge${S.nouveauxBadges.length > 1 ? 's' : ''} débloqué${S.nouveauxBadges.length > 1 ? 's' : ''}!</h2><div class="badges">${S.nouveauxBadges.map((b) => `<div class="badge-carte obtenu nouveau"><span aria-hidden="true">${b.icone}</span><b>${escapeHtml(b.nom)}</b><small>${escapeHtml(b.desc)}</small></div>`).join('')}</div></div>` : ''}
+    ${(() => { const pe = FB.prochaineEtape(S.results); if (!pe) return '';
+      return `<div class="card prochaine ${pe.type}"><h2>${pe.type === 'reussite' ? '🌟 Ce que tu maîtrises' : '🧭 Ta prochaine étape'}</h2>
+        <p class="pe-texte">${escapeHtml(pe.texte)}</p>${pe.rappel ? `<p class="muted">${escapeHtml(pe.rappel)}</p>` : ''}
+        ${pe.pratique ? '<button class="btn btn-accent" id="pratiquer">Pratiquer ce point (5 questions)</button>' : ''}</div>`; })()}
     <div class="summary-actions">
       ${fails.length ? '<button class="btn btn-accent" id="redo">M\'exercer sur mes erreurs</button>' : ''}
       <button class="btn btn-primary" id="again">Nouvelle série</button>
@@ -682,10 +705,13 @@ function viewSummary() {
         </li>`).join('')}</ol>
     </div>`));
   document.getElementById('menu').onclick = () => go('home');
-  document.getElementById('again').onclick = () => startSeries(S.cfg.mode === 'erreurs' ? S.cfg.parent : S.cfg);
+  const parent = S.cfg.parent || S.cfg;
+  document.getElementById('again').onclick = () => startSeries(parent);
+  const pr = document.getElementById('pratiquer');
+  if (pr) { const pe = FB.prochaineEtape(S.results); pr.onclick = () => startSeries({ mode: 'cible', parent, items: Array.from({ length: 5 }, () => ({ ...pe.pratique })) }); }
   const redo = document.getElementById('redo');
   if (redo) redo.onclick = () => startSeries({
-    mode: 'erreurs', parent: S.cfg.mode === 'erreurs' ? S.cfg.parent : S.cfg,
+    mode: 'erreurs', parent,
     items: fails.map(f => ({ m: f.q.module, t: f.q.theme, d: f.q.difficulty })),
   });
 }

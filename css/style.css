@@ -453,3 +453,12 @@ input, select { font: inherit; color: var(--ink); }
   .footer { font-size: .72rem; padding: .7rem; }
   .drill-top { gap: .5rem; }
 }
+
+/* Rétroaction constructive */
+.intention { font-size: .88rem; color: var(--ink-2); margin: -.6rem 0 .9rem; }
+.fb-diag { background: color-mix(in srgb, var(--surface) 75%, transparent); border-left: 4px solid var(--primary-2); padding: .45rem .7rem; border-radius: 8px; font-weight: 500; }
+.fb-proc { font-size: .9rem; font-weight: 600; color: var(--ink-2); }
+.prochaine { border-left: 5px solid var(--accent); }
+.prochaine.reussite { border-left-color: var(--ok); }
+.pe-texte { font-weight: 700; font-size: 1.05rem; }
+#etapeBox .steps { margin-top: .5rem; }
