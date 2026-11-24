@@ -47,9 +47,12 @@ let fail = 0;
 const ok = (name, cond, info) => { if (!cond) { fail++; console.log('ÉCHEC', name, info ? JSON.stringify(info) : ''); } };
 ctx.preparerFeuille();
 ctx.enregistrerNipAdmin_('2468');
+let r0 = call('login', { identifiant: 'admin', pin: '2468' }); ok('ancien NIP court refusé', !r0.ok && /10 à 12/.test(r0.error), r0);
+r0 = call('login', { identifiant: 'admin', pin: '1111' }); ok('même message, NIP bon ou mauvais', !r0.ok && /10 à 12/.test(r0.error), r0);
+ctx.enregistrerNipAdmin_('2468013579');
 ok('feuilles', ['Tentatives', 'Écoles', 'Groupes', 'Enseignants', 'Élèves'].every(n => sheets[n]));
 let r = call('login', { identifiant: 'admin', pin: '9999' }); ok('mauvais NIP', !r.ok);
-r = call('login', { identifiant: 'admin', pin: '2468' }); ok('admin', r.ok && r.session.role === 'admin', r); const tA = r.token;
+r = call('login', { identifiant: 'admin', pin: '2468013579' }); ok('admin', r.ok && r.session.role === 'admin', r); const tA = r.token;
 ok('école', call('saveSchool', { token: tA, nouveau: true, id: 'ESL', nom: 'École du Lac' }).ok);
 ok('école 2', call('saveSchool', { token: tA, nouveau: true, id: 'PDR', nom: 'Pierre-Dupuy' }).ok);
 r = call('getSchools'); ok('liste écoles', r.ecoles.length === 2, r);
@@ -90,15 +93,18 @@ ok('groupe gardé', call('listGroups', { token: tR }).groupes.length === 1);
 ok('supprimer groupe', call('deleteGroup', { token: tR, groupe: 'ESL-201' }).ok && sheets['Élèves'].rows.length === 1);
 ok('désactiver', call('saveTeacher', { token: tA, identifiant: 'mroy', actif: false }).ok && !call('whoami', { token: tR }).ok);
 // Demande de compte (option A : approbation par l'administrateur + courriel)
-r = call('teacherSignup', { nom: 'M. Gagnon', identifiant: 'pgagnon', pin: '2580', ecole: 'ESL', courriel: 'pg@ecole.ca', lien: 'https://exemple.github.io/algebre-sec2/enseignant.html' });
+r = call('teacherSignup', { nom: 'M. Gagnon', identifiant: 'pgagnon', pin: '2580', ecole: 'ESL', courriel: 'pg@ecole.ca', lien: 'https://pirate.example/hameconnage' });
 ok('demande', r.ok, r);
 ok('courriel admin', ctx._courriels.length === 1 && ctx._courriels[0].to === 'proprietaire@css.qc.ca' && /pgagnon/.test(ctx._courriels[0].body), ctx._courriels);
+ok('aucun lien ni nom dans le courriel', !/pirate|https?:/.test(ctx._courriels[0].body) && !/Gagnon/.test(ctx._courriels[0].subject), ctx._courriels[0]);
+ok('nom avec adresse Web refusé', !call('teacherSignup', { nom: 'Clique ici evil.com', identifiant: 'pirate', pin: '1234', ecole: 'ESL' }).ok);
+ok('nom accentué permis', call('teacherSignup', { nom: "Mme Lévesque-D'Amours", identifiant: 'mlda', pin: '1234', ecole: 'ESL' }).ok);
 ok('identifiant pris', !call('teacherSignup', { nom: 'X', identifiant: 'pgagnon', pin: '1234', ecole: 'ESL' }).ok);
 ok('école requise', !call('teacherSignup', { nom: 'X', identifiant: 'xx', pin: '1234', ecole: 'ZZZ' }).ok);
 r = call('login', { identifiant: 'pgagnon', pin: '2580' }); ok('en attente', !r.ok && /attente/.test(r.error), r);
 r = call('listTeachers', { token: tA }); ok('visible admin', r.enseignants.some(e => e.identifiant === 'pgagnon' && e.enAttente && e.ecole === 'École du Lac'), r);
 ok('approbation', call('saveTeacher', { token: tA, identifiant: 'pgagnon', actif: true }).ok);
-ok('courriel enseignant', ctx._courriels.length === 2 && ctx._courriels[1].to === 'pg@ecole.ca');
+ok('courriel enseignant', ctx._courriels[ctx._courriels.length - 1].to === 'pg@ecole.ca');
 ok('connexion après approbation', call('login', { identifiant: 'pgagnon', pin: '2580' }).ok);
 ok('plus en attente', !call('listTeachers', { token: tA }).enseignants.find(e => e.identifiant === 'pgagnon').enAttente);
 call('teacherSignup', { nom: 'Faux', identifiant: 'faux', pin: '1111', ecole: 'ESL' });
@@ -108,5 +114,18 @@ call('teacherSignup', { nom: 'Y', identifiant: 'yy', pin: '1111', ecole: 'PDR' }
 ok('courriel configuré', ctx._courriels[ctx._courriels.length - 1].to === 'daniel@css.qc.ca');
 for (let i = 0; i < 5; i++) call('login', { identifiant: 'zz', pin: '0' });
 ok('blocage', /Trop/.test(call('login', { identifiant: 'zz', pin: '0' }).error));
+// Blocage admin + courriel d'alerte (une seule fois par heure)
+const avant = ctx._courriels.length;
+for (let i = 0; i < 7; i++) call('login', { identifiant: 'admin', pin: '0000000000' });
+ok('blocage admin', /Trop/.test(call('login', { identifiant: 'admin', pin: '2468013579' }).error));
+ok('alerte admin unique', ctx._courriels.length === avant + 1 && /alerte/.test(ctx._courriels[avant].subject), ctx._courriels.slice(avant));
+// NIP admin trop court refusé au changement
+ok('changePin admin court refusé', !call('changePin', { token: tA, nouveau: '1234' }).ok);
+ok('changePin admin long', call('changePin', { token: tA, nouveau: '9081726354' }).ok);
+// GET : seulement ping et getSchools
+const get = (q) => JSON.parse(ctx.doGet({ parameter: q }).s);
+ok('GET ping', get({ action: 'ping' }).ok);
+ok('GET login refusé', !get({ action: 'login', identifiant: 'admin', pin: '9081726354' }).ok);
+ok('OnlyCurrentDoc', /@OnlyCurrentDoc/.test(src));
 console.log(fail ? `${fail} échec(s)` : 'Apps Script : tous les tests passent ✔');
 process.exit(fail ? 1 : 0);

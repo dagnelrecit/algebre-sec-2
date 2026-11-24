@@ -1,3 +1,5 @@
+/** @OnlyCurrentDoc  (le script n'a accès qu'à CETTE feuille, pas à tes autres fichiers Google) */
+
 /**
  * ============================================================
  *  Algèbre² — Base de données Google Sheets
@@ -44,6 +46,8 @@ const RX_CODE = /^([A-Z0-9]{2,6}-\d{1,4})-[A-Z]{2,4}\d?$/;
 const DUREE_JETON_ELEVE = 180 * 86400000; // 180 jours
 const DUREE_SESSION = 21600;              // 6 heures (maximum permis par le cache)
 const ADMIN = 'admin';
+const RX_NIP_ADMIN = /^\d{10,12}$/;           // NIP administrateur : 10 à 12 chiffres
+const MAX_ECHECS = 5;                            // essais de NIP permis par période de 5 minutes
 
 /* ================= Menu dans la feuille ================= */
 function onOpen() {
@@ -75,10 +79,10 @@ function preparerFeuille() {
 
 function definirNip() {
   const ui = SpreadsheetApp.getUi();
-  const r = ui.prompt('NIP administrateur', 'Choisis un NIP de 4 à 8 chiffres (identifiant de connexion : admin) :', ui.ButtonSet.OK_CANCEL);
+  const r = ui.prompt('NIP administrateur', 'Choisis un NIP de 10 à 12 chiffres (identifiant de connexion : admin).\nÉvite les suites faciles (1234567890, ta date de naissance…).', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   const nip = r.getResponseText().trim();
-  if (!/^\d{4,8}$/.test(nip)) { ui.alert('Le NIP doit contenir de 4 à 8 chiffres. Recommence.'); return; }
+  if (!RX_NIP_ADMIN.test(nip)) { ui.alert('Le NIP administrateur doit contenir de 10 à 12 chiffres. Recommence.'); return; }
   enregistrerNipAdmin_(nip);
   ui.alert('🔑 NIP administrateur enregistré (chiffré dans les propriétés du script).\nConnexion sur le site : identifiant « admin » + ce NIP.');
 }
@@ -118,7 +122,12 @@ function completerEntetes_(f, entetes) {
 }
 
 /* ================= Points d'entrée Web ================= */
-function doGet(e) { return repondre_(traiter_((e && e.parameter) || {})); }
+// Par lien (GET), seules les actions sans NIP ni jeton sont permises : rien de sensible dans les adresses.
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.action !== 'ping' && p.action !== 'getSchools') return repondre_({ ok: false, error: 'Action non permise par lien.' });
+  return repondre_(traiter_({ action: p.action }));
+}
 
 function doPost(e) {
   let req = {};
@@ -134,7 +143,7 @@ function traiter_(req) {
   try {
     // ---- Actions publiques (élèves)
     switch (req.action) {
-      case 'ping':            return { ok: true, message: 'Le script fonctionne.', app: 'algebre2', version: 4, demandesDeComptes: true, erreursDiagnostiquees: true };
+      case 'ping':            return { ok: true, message: 'Le script fonctionne.', app: 'algebre2', version: 5, demandesDeComptes: true, erreursDiagnostiquees: true };
       case 'getSchools':      return { ok: true, ecoles: lireEcoles_().filter(function (e) { return e.actif; }).map(function (e) { return { id: e.id, nom: e.nom }; }) };
       case 'studentCheck':    return verifierEleve_(req.code);
       case 'studentRegister': return inscrireEleve_(req.code, req.pin);
@@ -179,11 +188,36 @@ function hacher_(texte) {
 }
 function nipValide_(nip) { return /^\d{4,8}$/.test(String(nip || '')); }
 
+/** Réserve un essai de NIP AVANT de vérifier (sous verrou) : des requêtes envoyées en même temps
+ *  ne peuvent donc pas dépasser la limite. Renvoie le nombre d'essais déjà utilisés. */
+function reserverEssai_(cle, message) {
+  return verrou_(function () {
+    const cache = CacheService.getScriptCache();
+    const n = Number(cache.get(cle) || 0);
+    if (n >= MAX_ECHECS) throw new Error(message);
+    cache.put(cle, String(n + 1), 300);
+    return n + 1;
+  });
+}
+/** Alerte par courriel (au plus une par heure) quand le compte admin est bloqué. */
+function alerterAdmin_() {
+  const cache = CacheService.getScriptCache();
+  if (cache.get('alerte_admin')) return;
+  cache.put('alerte_admin', '1', 3600);
+  const dest = courrielAdmin_();
+  if (dest) envoyerCourriel_(dest, 'Algèbre² — alerte : essais répétés sur le compte administrateur',
+    MAX_ECHECS + ' NIP incorrects viennent d\'être entrés pour l\'identifiant « admin » (' +
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + ').\n\n' +
+    'Si ce n\'est pas toi, quelqu\'un essaie peut-être de deviner ton NIP. Le compte est bloqué 5 minutes après chaque série d\'essais.\n' +
+    'Par prudence, change ton NIP : dans la feuille, menu « Algèbre² › 2. Définir ou changer le NIP administrateur ».');
+}
+
 function enregistrerNipAdmin_(nip) {
   const p = PropertiesService.getScriptProperties();
   const sel = Utilities.getUuid();
   p.setProperty('NIP_SEL', sel);
   p.setProperty('NIP_HASH', hacher_(sel + nip));
+  p.setProperty('NIP_ADMIN_LONG', RX_NIP_ADMIN.test(String(nip)) ? 'oui' : '');
 }
 
 function connexion_(identifiant, nip) {
@@ -191,14 +225,19 @@ function connexion_(identifiant, nip) {
   if (!id) throw new Error('Entre ton identifiant.');
   const cache = CacheService.getScriptCache();
   const cleEchecs = 'echecs_' + id;
-  const echecs = Number(cache.get(cleEchecs) || 0);
-  if (echecs >= 5) throw new Error('Trop d\'essais pour cet identifiant. Réessaie dans 5 minutes.');
+  const essai = reserverEssai_(cleEchecs, 'Trop d\'essais pour cet identifiant. Réessaie dans 5 minutes.');
 
   let session = null;
   if (id === ADMIN) {
     const p = PropertiesService.getScriptProperties();
     const hash = p.getProperty('NIP_HASH');
     if (!hash) throw new Error('Aucun NIP administrateur : dans la feuille, utilise le menu « Algèbre² > Définir ou changer le NIP administrateur ».');
+    // Ancien NIP court (version 4) : le compte admin reste fermé tant qu'un NIP de 10 à 12 chiffres n'est pas défini.
+    // Ce message ne dépend pas du NIP entré : il ne révèle rien à quelqu'un qui essaie de le deviner.
+    if (p.getProperty('NIP_ADMIN_LONG') !== 'oui') {
+      cache.remove(cleEchecs);
+      throw new Error('Pour plus de sécurité, le NIP administrateur doit maintenant contenir de 10 à 12 chiffres. Dans la feuille Google, utilise le menu « Algèbre² › 2. Définir ou changer le NIP administrateur », puis reconnecte-toi.');
+    }
     if (hacher_((p.getProperty('NIP_SEL') || '') + String(nip || '')) === hash) session = { id: ADMIN, role: 'admin', nom: 'Administrateur' };
   } else {
     const e = trouverEnseignant_(id);
@@ -208,7 +247,7 @@ function connexion_(identifiant, nip) {
     }
   }
   if (!session) {
-    cache.put(cleEchecs, String(echecs + 1), 300);
+    if (id === ADMIN && essai >= MAX_ECHECS) alerterAdmin_();
     throw new Error('Identifiant ou NIP incorrect.');
   }
   cache.remove(cleEchecs);
@@ -232,8 +271,11 @@ function session_(jeton) {
 }
 
 function changerMonNip_(s, nouveau) {
+  if (s.role === 'admin') {
+    if (!RX_NIP_ADMIN.test(String(nouveau || ''))) throw new Error('Le NIP administrateur doit contenir de 10 à 12 chiffres.');
+    enregistrerNipAdmin_(String(nouveau)); return { ok: true };
+  }
   if (!nipValide_(nouveau)) throw new Error('Le NIP doit contenir de 4 à 8 chiffres.');
-  if (s.role === 'admin') { enregistrerNipAdmin_(String(nouveau)); return { ok: true }; }
   definirNipEnseignant_(s.id, String(nouveau));
   return { ok: true };
 }
@@ -332,10 +374,12 @@ function supprimerEnseignant_(id) {
 /* ================= Demandes de comptes (inscription par l'enseignant, approbation par l'admin) ================= */
 function demanderCompte_(req) {
   const id = String(req.identifiant || '').trim().toLowerCase();
-  const nom = String(req.nom || '').trim().slice(0, 60);
+  const nom = String(req.nom || '').trim().replace(/\s+/g, ' ').slice(0, 60);
   const ecole = String(req.ecole || '').trim().toUpperCase();
   const courriel = String(req.courriel || '').trim().slice(0, 120);
   if (!nom) throw new Error('Entre ton nom.');
+  // Lettres, espaces, apostrophes, tirets; un point seulement en fin de mot (« M. Roy ») : aucune adresse Web possible
+  if (!/^(?:[\p{L}'’ -]|\.(?= |$))+$/u.test(nom)) throw new Error('Ton nom ne peut contenir que des lettres, des espaces, des tirets et des apostrophes (ex. Mme Tremblay).');
   if (!/^[a-z0-9._-]{2,20}$/.test(id)) throw new Error('Identifiant : 2 à 20 caractères (lettres minuscules, chiffres, point, tiret).');
   if (id === ADMIN) throw new Error('L\'identifiant « admin » est réservé.');
   if (!nipValide_(req.pin)) throw new Error('Le NIP doit contenir de 4 à 8 chiffres.');
@@ -344,22 +388,22 @@ function demanderCompte_(req) {
   if (!e) throw new Error('Choisis ton école.');
   // Anti-pourriel : au plus 10 demandes par heure pour toute l'application
   const cache = CacheService.getScriptCache();
-  const n = Number(cache.get('demandes_heure') || 0);
-  if (n >= 10) throw new Error('Trop de demandes en peu de temps. Réessaie dans une heure.');
   verrou_(function () {
+    const n = Number(cache.get('demandes_heure') || 0);
+    if (n >= 10) throw new Error('Trop de demandes en peu de temps. Réessaie dans une heure.');
     if (trouverEnseignant_(id)) throw new Error('Cet identifiant est déjà utilisé : choisis-en un autre.');
+    cache.put('demandes_heure', String(n + 1), 3600);
     const sel = Utilities.getUuid();
     feuille_(F_ENS, E_ENS).appendRow([id, txt_(nom), hacher_(sel + String(req.pin)), sel, false, new Date(), 'en attente', txt_(e.nom), txt_(courriel)]);
   });
-  cache.put('demandes_heure', String(n + 1), 3600);
   const dest = courrielAdmin_();
-  const lien = /^https:\/\/[^\s]+$/.test(String(req.lien || '')) ? String(req.lien).slice(0, 300) : '';
-  if (dest) envoyerCourriel_(dest, 'Algèbre² — nouvelle demande de compte enseignant : ' + nom,
+  // Aucun lien ni texte libre dans l'objet : ce courriel part de TON compte, il ne doit pas pouvoir servir à hameçonner.
+  if (dest) envoyerCourriel_(dest, 'Algèbre² — nouvelle demande de compte enseignant',
     'Une nouvelle demande de compte enseignant attend ton approbation.\n\n' +
     'Nom : ' + nom + '\nIdentifiant : ' + id + '\nÉcole : ' + e.nom + (courriel ? '\nCourriel : ' + courriel : '') +
     '\nDate : ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + '\n\n' +
-    'Pour l\'approuver ou la refuser : espace enseignant (identifiant admin) › onglet « Enseignants » › Demandes en attente.' +
-    (lien ? '\n' + lien : ''));
+    'Pour l\'approuver ou la refuser : ouvre toi-même l\'espace enseignant (identifiant admin) › onglet « Enseignants » › Demandes en attente.\n' +
+    'Ce courriel ne contient jamais de lien : n\'en suis aucun qui prétendrait venir d\'Algèbre².');
   return { ok: true };
 }
 function envoyerCourriel_(dest, sujet, corps) {
@@ -610,14 +654,10 @@ function connecterEleve_(code, nip) {
   const c = codeEleveValide_(code);
   const cache = CacheService.getScriptCache();
   const cle = 'echecs_el_' + c.code;
-  const echecs = Number(cache.get(cle) || 0);
-  if (echecs >= 5) throw new Error('Trop d\'essais. Réessaie dans 5 minutes ou demande à ton enseignant·e de réinitialiser ton NIP.');
   const el = trouverEleve_(c.code);
   if (!el || !el.hash) throw new Error('Aucun NIP pour ce code : c\'est ta première connexion ?');
-  if (hacher_(el.sel + String(nip || '')) !== el.hash) {
-    cache.put(cle, String(echecs + 1), 300);
-    throw new Error('NIP incorrect.');
-  }
+  reserverEssai_(cle, 'Trop d\'essais. Réessaie dans 5 minutes ou demande à ton enseignant·e de réinitialiser ton NIP.');
+  if (hacher_(el.sel + String(nip || '')) !== el.hash) throw new Error('NIP incorrect.');
   cache.remove(cle);
   if (!groupeOuvert_(c.groupe)) throw new Error('Ce groupe n\'existe plus. Vérifie avec ton enseignant·e.');
   return verrou_(function () { return { ok: true, token: nouveauJeton_(trouverEleve_(c.code)), progression: progressionLue_(el.progression) }; });

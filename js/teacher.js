@@ -61,7 +61,7 @@ function vueConnexion() {
       <h1>Espace enseignant</h1>
       <p class="muted">Connecte-toi avec ton identifiant et ton NIP.</p>
       <label class="field"><span>Identifiant</span><input id="inId" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="ex. dcyr" ${S.LOCAL ? 'value="admin"' : ''}></label>
-      <label class="field"><span>NIP</span><input id="inNip" class="nip-input" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password"></label>
+      <label class="field"><span>NIP</span><input id="inNip" class="nip-input" type="password" inputmode="numeric" maxlength="12" autocomplete="current-password"></label>
       <p class="form-error" id="err" role="alert"></p>
       <button class="btn btn-primary btn-lg" id="btnNip">Entrer</button>
       <p class="aide" style="margin-top:.8rem">${S.LOCAL ? '📴 Mode local : NIP défini dans <code>js/config.js</code> (NIP_LOCAL). Seuls les résultats de cet appareil sont visibles.' : 'Pas de compte? <button type="button" class="link" id="lienDemande">Demander un compte enseignant</button>'}</p>
@@ -120,9 +120,10 @@ async function vueDemande() {
     const d = Object.fromEntries(new FormData(f));
     const err = f.querySelector('#err');
     if (d.pin !== d.pin2) { err.textContent = 'Les deux NIP ne sont pas identiques.'; return; }
+    if (!/^(?:[\p{L}'’ -]|\.(?= |$))+$/u.test(String(d.nom || '').trim().replace(/\s+/g, ' '))) { err.textContent = 'Ton nom ne peut contenir que des lettres, des espaces, des tirets et des apostrophes (ex. Mme Tremblay).'; return; }
     const btn = f.querySelector('#btnEnvoyer'); btn.disabled = true; btn.textContent = 'Envoi…';
     try {
-      await S.api('teacherSignup', { nom: d.nom, ecole: d.ecole, identifiant: d.identifiant.trim().toLowerCase(), pin: d.pin, courriel: d.courriel, lien: location.href.split('#')[0] });
+      await S.api('teacherSignup', { nom: d.nom, ecole: d.ecole, identifiant: d.identifiant.trim().toLowerCase(), pin: d.pin, courriel: d.courriel });
       app.innerHTML = `<div class="card login-card narrow"><div style="font-size:2.4rem" aria-hidden="true">📨</div><h1>Demande envoyée!</h1>
         <p>L'administrateur a été avisé. Dès que ta demande sera approuvée, tu pourras te connecter avec l'identifiant <b>${e(d.identifiant.trim().toLowerCase())}</b> et ton NIP${d.courriel ? ' (tu recevras aussi un courriel)' : ''}.</p>
         <button class="btn btn-primary" id="ok">Retour à la connexion</button></div>`;
@@ -457,8 +458,8 @@ function ongletCompte() {
       <div class="actions" style="justify-content:flex-start"><button class="btn btn-primary" id="csvDetail">⬇ CSV détaillé (une ligne par question)</button><button class="btn btn-ghost" id="csvSommaire">⬇ CSV sommaire (une ligne par élève)</button></div>
     </div>
     ${S.LOCAL ? '' : `<form class="card form-inline" id="fMonNip"><h2>Changer mon NIP</h2>
-      <label>Nouveau NIP<input name="n1" type="password" inputmode="numeric" maxlength="8" required></label>
-      <label>Confirme<input name="n2" type="password" inputmode="numeric" maxlength="8" required></label>
+      <label>Nouveau NIP ${T.session.role === 'admin' ? '(10 à 12 chiffres)' : '(4 à 8 chiffres)'}<input name="n1" type="password" inputmode="numeric" maxlength="${T.session.role === 'admin' ? 12 : 8}" required></label>
+      <label>Confirme<input name="n2" type="password" inputmode="numeric" maxlength="${T.session.role === 'admin' ? 12 : 8}" required></label>
       <button class="btn btn-primary">Enregistrer</button></form>`}`;
   corps.querySelector('#csvDetail').onclick = () => exporterDetail(lignes);
   corps.querySelector('#csvSommaire').onclick = () => exporterSommaire(agreger(lignes));
@@ -471,7 +472,13 @@ function ongletCompte() {
 }
 
 /* ---------- CSV : point-virgule + BOM pour Excel en français ---------- */
-const cell = (v) => { const s = String(v ?? ''); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+// Une cellule texte qui commence par = + - @ (ou tabulation) serait exécutée comme une FORMULE par Excel :
+// on la préfixe d'une apostrophe (recommandation OWASP « CSV injection »). Les nombres restent des nombres.
+const cell = (v) => {
+  let s = String(v ?? '');
+  if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[;"\n\r\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
 function telecharger(nom, rangees) {
   const blob = new Blob(['﻿' + rangees.map((r) => r.map(cell).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = h('a', { href: URL.createObjectURL(blob), download: nom });

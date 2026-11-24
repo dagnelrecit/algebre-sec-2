@@ -37,7 +37,7 @@ tests/                ← tests automatiques (facultatif, avec Node.js)
 4. Retourne dans la feuille et **recharge la page** (F5). Un menu **« Algèbre² »** apparaît à droite d'« Aide ».
 5. Menu **Algèbre² › 1. Préparer la feuille**. Google demande une autorisation la première fois :
    *Continuer › choisis ton compte › Paramètres avancés › Accéder au projet (non sécurisé) › Autoriser*. C'est normal : c'est ton propre script.
-6. Menu **Algèbre² › 2. Définir ou changer le NIP administrateur**, puis choisis un NIP de 4 à 8 chiffres. Sur le site, tu te connecteras avec l'identifiant **admin** et ce NIP.
+6. Menu **Algèbre² › 2. Définir ou changer le NIP administrateur**, puis choisis un NIP de **10 à 12 chiffres** (évite les suites faciles et ta date de naissance). Sur le site, tu te connecteras avec l'identifiant **admin** et ce NIP.
 7. *(Facultatif)* Menu **Algèbre² › 3. Courriel pour les demandes de comptes** : choisis l'adresse qui reçoit un courriel quand un enseignant demande un compte. Par défaut, c'est le propriétaire de la feuille.
 8. Dans Apps Script : **Déployer › Nouveau déploiement**
    - Type (⚙️) : **Application Web**
@@ -48,6 +48,16 @@ tests/                ← tests automatiques (facultatif, avec Node.js)
 > 💡 **Test rapide :** colle l'URL suivie de `?action=ping` dans ton navigateur. Tu dois voir `{"ok":true,"message":"Le script fonctionne.", "app":"algebre2", …}`.
 
 > 📧 **Mise à jour pour les demandes de comptes (si ta feuille est déjà installée) :** colle le nouveau `Code.gs`, enregistre, recharge la feuille, puis lance **Algèbre² › 1. Préparer la feuille**. Google redemande une autorisation, cette fois pour **envoyer des courriels en ton nom** : accepte-la. Publie ensuite une **nouvelle version** du déploiement (voir ci-dessous).
+
+> 🔒 **Mise à jour de sécurité, script version 5 (si ta feuille est déjà installée) :**
+> 1. Colle le nouveau `Code.gs`, enregistre (💾), puis recharge la feuille.
+> 2. Lance **Algèbre² › 1. Préparer la feuille**. Google redemande une autorisation : c'est normal, le script n'a maintenant accès **qu'à cette feuille** (et non plus à toutes tes feuilles Google). Accepte-la.
+> 3. Lance **Algèbre² › 2. Définir ou changer le NIP administrateur** et choisis un NIP de **10 à 12 chiffres**. Tant que ce n'est pas fait, la connexion « admin » est refusée. Les enseignants et les élèves gardent leur NIP.
+> 4. Publie une **nouvelle version** du déploiement (voir ci-dessous). Téléverse ensuite le site dans GitHub : `version.json` est déjà à jour.
+> 5. Vérifie que `?action=ping` affiche `"version":5`.
+
+> 🛡️ **Ce que la version 5 ajoute :** limite d'essais de NIP impossible à contourner avec des requêtes simultanées · courriel d'alerte quand quelqu'un se trompe 5 fois sur le NIP admin · courriels de demande de compte sans lien ni texte libre dans l'objet (anti-hameçonnage) · script limité à cette seule feuille (`@OnlyCurrentDoc`) · actions sensibles refusées par simple lien (GET) · export CSV protégé contre les formules Excel piégées · politique de sécurité du contenu (CSP) dans les pages : le navigateur refuse tout script qui ne vient pas du site.
+> 💡 Active aussi la **double authentification** sur ton compte GitHub et ton compte Google : quiconque y accède peut modifier le site ou lire la feuille.
 
 > ⚠️ **Si tu modifies `Code.gs` plus tard :** *Déployer › Gérer les déploiements › ✏️ › Version : Nouvelle version › Déployer*. L'URL reste la même.
 
@@ -214,6 +224,8 @@ node tests/feedback.test.mjs     # fiabilité des diagnostics d'erreurs
 |---|---|
 | « 📴 Local » s'affiche et le champ **École** n'apparaît pas | L'URL n'est pas configurée (ou est mal copiée) dans `js/config.js`. La liste des écoles vient de la feuille Google : sans elle, le champ est masqué. Pour essayer l'application sans feuille Google, tu peux définir des écoles dans `ECOLES_LOCALES` (`js/config.js`). |
 | Le champ École affiche « Aucune école n'est encore créée » | Connecte-toi en `admin` dans l'espace enseignant et ajoute les écoles (onglet 🏛️ Écoles). |
+| « Le NIP administrateur doit maintenant contenir de 10 à 12 chiffres » | Dans la feuille : menu *Algèbre² › 2. Définir ou changer le NIP administrateur*, puis reconnecte-toi. |
+| Dans le CSV ouvert dans Excel, des réponses commencent par une apostrophe (ex. `'-2x+3`) | C'est voulu : une cellule qui commence par `=`, `+`, `-` ou `@` serait sinon exécutée comme une formule par Excel. |
 | « Aucun NIP administrateur » | Dans la feuille : menu *Algèbre² › Définir ou changer le NIP administrateur*. |
 | Aucun courriel n'arrive pour les demandes de comptes | Lance une fois **Algèbre² › 1. Préparer la feuille** pour autoriser l'envoi de courriels, puis publie une nouvelle version du déploiement. Vérifie l'adresse avec le menu 3 et regarde dans les courriels indésirables. La demande apparaît quand même dans l'onglet Enseignants. |
 | Un enseignant a oublié son NIP | L'administrateur entre un nouveau NIP dans l'onglet Enseignants. |
